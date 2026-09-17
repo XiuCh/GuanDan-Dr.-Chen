@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { socket } from './socket';
 import { Card, GameMode, SkillCard, Hand, HistoryEntry } from '../shared/types';
 
@@ -40,14 +40,6 @@ export function useGame() {
   const [mySeat, setMySeat] = useState<number>(-1);
   const [error, setError] = useState<string | null>(null);
   const [chatMessages, setChatMessages] = useState<{sender: string, text: string, time: string, seatIndex: number}[]>([]);
-  const [roomList, setRoomList] = useState<Array<{
-    id: string;
-    playerCount: number;
-    maxPlayers: number;
-    inGame: boolean;
-    gameMode: GameMode;
-    hostName: string;
-  }>>([]);
 
   useEffect(() => {
     socket.on('roomState', (state: any) => {
@@ -91,23 +83,17 @@ export function useGame() {
         setGameState(null); // Clear game state to return to lobby
     });
 
-    socket.on('roomList', (list: any[]) => {
-        console.log('[Client] Received room list:', list);
-        setRoomList(list);
-    });
-
     return () => {
       socket.off('roomState');
       socket.off('gameState');
       socket.off('error');
       socket.off('gameOver');
       socket.off('gameTerminated');
-      socket.off('roomList');
     };
   }, []);
 
-  const joinRoom = (name: string, roomId: string) => {
-    socket.emit('joinRoom', { playerName: name, roomId });
+  const joinRoom = (name: string, roomId: string, password: string) => {
+    socket.emit('joinRoom', { playerName: name, roomId, password });
   };
 
   const setReady = () => {
@@ -154,10 +140,6 @@ export function useGame() {
       socket.emit('forceEndGame');
   }
 
-  const fetchRoomList = () => {
-      socket.emit('getRoomList');
-  }
-
   return {
     inRoom,
     roomState,
@@ -166,7 +148,6 @@ export function useGame() {
     setMySeat,
     error,
     chatMessages,
-    roomList,
-    actions: { joinRoom, setReady, playHand, passTurn, startGame, payTribute, returnTribute, sendChat, switchSeat, setGameMode, useSkill, forceEndGame, fetchRoomList }
+    actions: { joinRoom, setReady, playHand, passTurn, startGame, payTribute, returnTribute, sendChat, switchSeat, setGameMode, useSkill, forceEndGame }
   };
 }

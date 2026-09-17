@@ -2,6 +2,7 @@ import { Server, Socket } from 'socket.io';
 import { Game } from './game';
 import { Match } from './match';
 import { GameMode } from '../shared/types';
+import { createHash, timingSafeEqual } from 'crypto';
 
 export interface Player {
   id: string; // Socket ID (Current)
@@ -21,13 +22,34 @@ export class RoomManager {
     this.io = io;
   }
 
-  joinRoom(socket: Socket, playerName: string, roomId: string) {
-    let room = this.rooms.get(roomId);
-    if (!room) {
-      room = new Room(roomId, this.io);
-      this.rooms.set(roomId, room);
+  joinRoom(socket: Socket, playerName: string, roomId: string, password: string) {
+    const cleanName = playerName.trim();
+    const cleanRoomId = roomId.trim();
+
+    if (!cleanName || cleanName.length > 12) {
+      socket.emit('error', '昵称应为 1–12 个字符');
+      return;
     }
-    room.addPlayer(socket, playerName);
+
+    if (!/^[A-Za-z0-9_-]{4,32}$/.test(cleanRoomId)) {
+      socket.emit('error', '房间号应为 4–32 位字母、数字、- 或 _');
+      return;
+    }
+
+    if (password.length < 4 || password.length > 32) {
+      socket.emit('error', '房间密码应为 4–32 个字符');
+      return;
+    }
+
+    let room = this.rooms.get(cleanRoomId);
+    if (!room) {
+      room = new Room(cleanRoomId, password, this.io);
+      this.rooms.set(cleanRoomId, room);
+    } else if (!room.passwordMatches(password)) {
+      socket.emit('error', '房间密码不正确');
+      return;
+    }
+    room.addPlayer(socket, cleanName);
   }
 
   handleDisconnect(socket: Socket) {
@@ -36,34 +58,25 @@ export class RoomManager {
     }
   }
 
-  getRoomList() {
-    const roomList = Array.from(this.rooms.values()).map(room => ({
-      id: room.id,
-      playerCount: room.players.filter(p => p !== null && !p.isDisconnected).length,
-      maxPlayers: 4,
-      inGame: room.match !== null && room.match.currentGame !== null,
-      gameMode: room.gameMode,
-      hostName: room.players[0]?.name || 'Unknown'
-    }));
-    return roomList;
-  }
-
-  handleGetRoomList(socket: Socket) {
-    const roomList = this.getRoomList();
-    socket.emit('roomList', roomList);
-  }
 }
 
 class Room {
   id: string;
+  private passwordHash: Buffer;
   io: Server;
   players: (Player | null)[] = [null, null, null, null];
   match: Match | null = null; // Changed from game to match
   gameMode: GameMode = GameMode.Normal;
 
-  constructor(id: string, io: Server) {
+  constructor(id: string, password: string, io: Server) {
     this.id = id;
+    this.passwordHash = createHash('sha256').update(password, 'utf8').digest();
     this.io = io;
+  }
+
+  passwordMatches(password: string) {
+    const candidateHash = createHash('sha256').update(password, 'utf8').digest();
+    return timingSafeEqual(this.passwordHash, candidateHash);
   }
 
   addPlayer(socket: Socket, name: string) {
@@ -105,6 +118,11 @@ class Room {
         this.io.to(this.id).emit('error', `Player ${name} reconnected!`);
         this.broadcastState();
         return;
+    }
+
+    if (this.players.some(p => p && !p.isDisconnected && p.name === name)) {
+      socket.emit('error', '该昵称已在房间中，请换一个昵称');
+      return;
     }
 
     // Normal Join

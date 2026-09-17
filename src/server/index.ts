@@ -29,12 +29,17 @@ app.use(express.static(path.join(__dirname, '../client'), {
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
 
-  socket.on('joinRoom', ({ playerName, roomId }) => {
-    roomManager.joinRoom(socket, playerName, roomId || 'default');
-  });
+  socket.on('joinRoom', (payload: unknown) => {
+    const data = payload && typeof payload === 'object'
+      ? payload as Record<string, unknown>
+      : {};
 
-  socket.on('getRoomList', () => {
-    roomManager.handleGetRoomList(socket);
+    roomManager.joinRoom(
+      socket,
+      typeof data.playerName === 'string' ? data.playerName : '',
+      typeof data.roomId === 'string' ? data.roomId : '',
+      typeof data.password === 'string' ? data.password : ''
+    );
   });
 
   socket.on('disconnect', () => {
