@@ -48,10 +48,10 @@ export const Card: React.FC<Props> = ({ card, selected, onClick, small, isHighli
   return <button type="button" disabled={!onClick} onClick={onClick}
     aria-label={`${label}${isJoker ? '' : symbol}${card.isWild ? ' 万能牌' : ''}`}
     aria-pressed={onClick ? !!selected : undefined}
-    className={`playing-card ${small ? 'card-small' : ''} ${isRed ? 'card-red' : ''} ${selected ? 'card-selected' : ''} ${isHighlighted ? 'card-highlight' : ''}`}>
+    className={`playing-card ${small ? 'card-small' : ''} ${isRed ? 'card-red' : ''} ${selected ? 'card-selected' : ''} ${isHighlighted ? 'card-highlight' : ''} ${card.isWild ? 'card-wild' : ''}`}>
     <span className="card-corner"><strong>{label}</strong><span>{isJoker ? '✦' : symbol}</span></span>
     <span className="card-center" aria-hidden="true">{isJoker ? '✦' : symbol}</span>
     <span className="card-corner card-bottom" aria-hidden="true"><strong>{label}</strong><span>{isJoker ? '✦' : symbol}</span></span>
-    {card.isLevelCard && <span className="card-level">{card.isWild ? '万能' : '级'}</span>}
+    {(card.isLevelCard || card.isWild) && <span className="card-level">{card.isWild ? '万能' : '级'}</span>}
   </button>;
 };

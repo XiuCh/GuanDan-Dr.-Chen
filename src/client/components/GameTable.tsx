@@ -3,7 +3,7 @@ import { Card as CardType, Rank, Suit, GameMode, SkillCard, SkillCardType, Hand 
 import { Bot } from '../../shared/bot';
 import { Card } from './Card';
 import { GameState, RoomState } from '../useGame';
-import { getLogicValue, isConsecutive, getAllPossibleHandTypes, getHandDescription } from '../../shared/rules';
+import { compareHands, getLogicValue, isConsecutive, getAllPossibleHandTypes, getHandDescription } from '../../shared/rules';
 import { SkillCardButton } from './SkillCardButton';
 import { TargetSelectModal } from './TargetSelectModal';
 import { GameHistory } from './GameHistory';
@@ -52,6 +52,18 @@ export const GameTable: React.FC<Props> = ({
   
   // History window state
   const [showHistory, setShowHistory] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const [showRoomMenu, setShowRoomMenu] = useState(false);
+  const [hintMessage, setHintMessage] = useState('');
+  const displayName = (name?: string) => name?.replace(/^Bot (\d+)$/, '电脑 $1') || '等待入座';
+  const rankLabel = (rank: number) => ({11:'J',12:'Q',13:'K',14:'A'}[rank] || String(rank));
+  const handLabel = (hand: Hand) => getHandDescription(hand, gameState?.level || 2);
+  useEffect(() => { setHintMessage(''); setSelectedCardIds([]); setShowHandSelector(false); }, [gameState?.currentTurn, gameState?.phase]);
+  useEffect(() => {
+    const close = (e: KeyboardEvent) => { if (e.key === 'Escape') {setShowChat(false);setShowHistory(false);setShowRoomMenu(false);} };
+    window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close);
+  }, []);
+
   
   // Hand type selection state (for wild cards with multiple interpretations)
   const [possibleHands, setPossibleHands] = useState<Hand[]>([]);
@@ -193,34 +205,18 @@ export const GameTable: React.FC<Props> = ({
     );
   };
 
+  const selectedCards = sortedHand.filter(c => selectedCardIds.includes(c.id));
+  const isMyTurn = !!gameState && gameState.phase === 'Playing' && gameState.currentTurn === mySeat;
+  const targetHand = gameState?.lastHand && gameState.lastHand.playerIndex !== mySeat ? gameState.lastHand.hand : null;
+  const validHands = gameState && selectedCards.length ? getAllPossibleHandTypes(selectedCards, gameState.level) : [];
+  const playableHands = validHands.filter(hand => !targetHand || compareHands(hand, targetHand) > 0);
+  const cannotPlay = !isMyTurn ? '请等待其他玩家出牌' : !selectedCards.length ? '请选择要出的牌' : !validHands.length ? '所选牌不能组成有效牌型' : !playableHands.length ? '所选牌压不过当前出牌，请重新选择或不出' : '';
   const handlePlay = () => {
-    const cards = sortedHand.filter(c => selectedCardIds.includes(c.id));
-    
-    // Check if cards contain wild cards
-    const hasWild = cards.some(c => c.isWild);
-    
-    if (hasWild && gameState) {
-      // Get all possible hand types
-      const possibilities = getAllPossibleHandTypes(cards, gameState.level);
-      
-      if (possibilities.length > 1) {
-        // Multiple interpretations - show selector
-        setPossibleHands(possibilities);
-        setShowHandSelector(true);
-        return;
-      } else if (possibilities.length === 1) {
-        // Single interpretation - play directly
-        onPlay(cards, possibilities[0]);
-        setSelectedCardIds([]);
-        return;
-      }
-    }
-    
-    // No wild cards or no valid interpretation - play as normal
-    onPlay(cards);
-    setSelectedCardIds([]);
+    if (cannotPlay) return;
+    if (playableHands.length > 1) {setPossibleHands(playableHands);setShowHandSelector(true);return;}
+    onPlay(selectedCards, playableHands[0]); setSelectedCardIds([]);setHintMessage('');
   };
-  
+
   const handleHandTypeSelect = (hand: Hand) => {
     const cards = sortedHand.filter(c => selectedCardIds.includes(c.id));
     onPlay(cards, hand);
@@ -236,9 +232,9 @@ export const GameTable: React.FC<Props> = ({
       const move = bot.decideMove(target);
       
       if (move) {
-          setSelectedCardIds(move.map(c => c.id));
+          setSelectedCardIds(move.map(c => c.id)); setHintMessage('已为你选好建议出的牌');
       } else {
-          setSelectedCardIds([]);
+          setSelectedCardIds([]); setHintMessage('没有可压过的牌，可以选择不出');
       }
   };
   
@@ -310,17 +306,17 @@ export const GameTable: React.FC<Props> = ({
   const renderLastHand = () => {
     if (!gameState || !gameState.lastHand) return null;
     const { playerIndex, hand } = gameState.lastHand;
-    const playerName = roomState.players.find(p => p && p.seatIndex === playerIndex)?.name || `Seat ${playerIndex}`;
+    const playerName = roomState.players.find(p => p && p.seatIndex === playerIndex)?.name || `座位 ${playerIndex + 1}`;
     
     return (
-      <div className="bg-green-700/50 p-4 rounded-lg flex flex-col items-center">
-        <div className="text-white mb-2 font-bold">{playerName} 出牌:</div>
-        <div className="flex -space-x-8">
+      <div className="last-play">
+        <div className="text-white mb-2 font-bold">{displayName(playerName)} 出牌</div>
+        <div className="last-play-cards">
            {hand.cards.map((c: CardType) => (
              <Card key={c.id} card={c} />
            ))}
         </div>
-        <div className="text-yellow-300 font-bold mt-2">{hand.type}</div>
+        <div className="text-yellow-300 font-bold mt-2">{handLabel(hand)}</div>
       </div>
     );
   };
@@ -360,7 +356,7 @@ export const GameTable: React.FC<Props> = ({
     
     return (
       <div 
-          className={`absolute ${pos} flex flex-col items-center p-4 rounded-lg transition-colors ${data.isTeammate ? 'bg-blue-900/40 border-2 border-blue-400' : 'bg-black/20'} ${!gameState && !data.player ? 'cursor-pointer hover:bg-white/10' : ''}`}
+          className={`player-seat ${gameState?.phase === 'Playing' && gameState.currentTurn === data.seat ? 'seat-active' : ''} absolute ${pos} flex flex-col items-center p-4 rounded-lg transition-colors ${data.isTeammate ? 'bg-blue-900/40 border-2 border-blue-400' : 'bg-black/20'} ${!gameState && !data.player ? 'cursor-pointer hover:bg-white/10' : ''}`}
           onClick={() => !gameState && !data.player && onSwitchSeat(data.seat)}
       >
          {/* Chat Bubble */}
@@ -376,11 +372,11 @@ export const GameTable: React.FC<Props> = ({
          
          <div className="w-12 h-12 bg-gray-300 rounded-full flex items-center justify-center mb-2 relative">
            {data.player ? data.player.name[0].toUpperCase() : (gameState ? '?' : '+')}
-           {data.isTeammate && <div className="absolute -top-1 -right-1 bg-blue-500 text-xs text-white px-1 rounded">友</div>}
-           {data.isOpponent && <div className="absolute -top-1 -right-1 bg-red-500 text-xs text-white px-1 rounded">敌</div>}
+           {data.isTeammate && <div className="absolute -top-1 -right-1 bg-blue-500 text-xs text-white px-1 rounded">搭档</div>}
+           {data.isOpponent && <div className="absolute -top-1 -right-1 bg-red-500 text-xs text-white px-1 rounded">对方</div>}
            {data.player && data.player.seatIndex === 0 && (
                <div className="absolute -bottom-1 -right-1 text-xs bg-yellow-500 text-black px-1 rounded font-bold border border-white">
-                   Host
+                   房主
                </div>
            )}
            {/* Winner Position Badge */}
@@ -391,30 +387,34 @@ export const GameTable: React.FC<Props> = ({
            )}
          </div>
          <div className="text-white font-bold flex items-center gap-2">
-             {data.player ? data.player.name : (gameState ? 'Waiting...' : '点击入座')}
+             {data.player ? displayName(data.player.name) : '点击入座'}
              {data.player && (data.player as any).isDisconnected && (
-                 <span className="text-red-500 text-xs font-bold bg-white px-1 rounded animate-pulse">OFF</span>
+                 <span className="text-red-500 text-xs font-bold bg-white px-1 rounded animate-pulse">离线</span>
              )}
          </div>
+         {!gameState && data.player && (
+             <div className={`seat-status ${data.player.isReady ? 'is-ready' : ''}`}>
+               {data.seat === mySeat ? '我的座位' : data.isTeammate ? '你的搭档' : '对方座位'} · {data.player.isReady ? '已准备' : '未准备'}
+             </div>
+         )}
          {gameState && <div className="text-yellow-400">剩余 {data.handCount} 张</div>}
-         {data.player && data.player.isReady && !gameState && <div className="text-green-400 text-sm">已准备</div>}
          
          {/* Show current round action */}
          {gameState && action && (
              <div className="mt-2 flex flex-col items-center">
                  {action.type === 'pass' ? (
-                     <div className="text-gray-400 font-bold text-sm bg-gray-700/50 px-3 py-1 rounded">过</div>
+                     <div className="text-gray-400 font-bold text-sm bg-gray-700/50 px-3 py-1 rounded">不出</div>
                  ) : (
                      <div className="flex flex-col items-center">
-                         <div className="text-green-400 text-xs mb-1">{action.hand?.type || '出牌'}</div>
+                         <div className="text-green-400 text-xs mb-1">{action.hand ? handLabel(action.hand) : '出牌'}</div>
                          {renderActionCards(action.cards)}
                      </div>
                  )}
              </div>
          )}
          
-         {gameState && gameState.currentTurn === data.seat && !action && (
-             <div className="animate-bounce text-red-500 font-bold mt-2">思考中…</div>
+         {gameState?.phase === 'Playing' && gameState.currentTurn === data.seat && (
+             <div className="animate-bounce text-red-500 font-bold mt-2">正在出牌</div>
          )}
       </div>
     );
@@ -466,8 +466,20 @@ export const GameTable: React.FC<Props> = ({
       <PlayerArea data={left} pos="left-8 top-1/2 -translate-y-1/2" />
       <PlayerArea data={right} pos="right-8 top-1/2 -translate-y-1/2" />
       
+      <nav className="table-tools" aria-label="房间工具">
+        <button aria-expanded={showChat} onClick={() => {setShowChat(!showChat);setShowHistory(false);setShowRoomMenu(false);}}>聊天</button>
+        <button aria-expanded={showHistory} onClick={() => {setShowHistory(!showHistory);setShowChat(false);setShowRoomMenu(false);}}>历史记录</button>
+        <button aria-expanded={showRoomMenu} onClick={() => {setShowRoomMenu(!showRoomMenu);setShowChat(false);setShowHistory(false);}}>房间菜单</button>
+      </nav>
+      {showRoomMenu && <section className="room-menu" aria-label="房间菜单">
+        <strong>房间 {roomState.roomId}</strong><p>房间凭密码加入</p>
+        {mySeat === 0 && gameState && <button className="danger-action" onClick={() => {if(window.confirm('确定结束当前对局？本场进度将丢失，所有玩家返回等待区。')){onForceEndGame?.();setShowRoomMenu(false);}}}>结束当前对局</button>}
+        <button onClick={() => setShowRoomMenu(false)}>关闭菜单</button>
+      </section>}
+      {showChat && <>
       {/* Chat Box */}
       <div className="table-chat absolute top-4 right-4 w-72 h-56 bg-[#252526] border border-[#333333] rounded flex flex-col pointer-events-auto z-10 shadow-lg">
+          <div className="chat-heading"><strong>房间聊天</strong><button aria-label="关闭聊天" onClick={() => setShowChat(false)}>×</button></div>
           <div className="flex-1 overflow-y-auto p-2 text-sm text-[#d4d4d4] scrollbar-thin">
               {chatMessages.map((msg, i) => (
                   <div key={i} className="mb-1">
@@ -509,7 +521,7 @@ export const GameTable: React.FC<Props> = ({
               </button>
               <input 
                   className="flex-1 bg-[#3c3c3c] border-none text-white text-sm focus:outline-none rounded px-2 py-1" 
-                  placeholder="输入消息..." 
+                  aria-label="聊天消息" placeholder="输入消息..." 
                   value={chatInput}
                   onChange={e => setChatInput(e.target.value)}
               />
@@ -517,82 +529,67 @@ export const GameTable: React.FC<Props> = ({
           </form>
       </div>
 
-      {gameState && (
-          <div className="absolute top-4 left-4 flex flex-col gap-2 items-start z-50">
-              <div className="text-[#d4d4d4] font-bold text-xl bg-[#252526] border border-[#333333] px-4 py-2 rounded shadow-lg">
-                  <span className="text-[#569cd6]">const</span> <span className="text-[#9cdcfe]">Level</span> = <span className="text-[#b5cea8]">{gameState.level}</span>;
-              </div>
-              
-              {/* Host Force End Button */}
-              {me.player && me.player.seatIndex === 0 && (
-                <button 
-                    onClick={() => {
-                        if (confirm('⚠️ 确定要强制结束当前游戏吗？所有进度将丢失。')) {
-                            onForceEndGame?.();
-                        }
-                    }}
-                    className="bg-red-900/80 hover:bg-red-600 text-white text-xs px-3 py-1 rounded border border-red-500/50 shadow-lg backdrop-blur-sm transition-all flex items-center gap-1"
-                >
-                    <span>⛔</span> 强制结束
-                </button>
-              )}
-          </div>
-      )}
-      
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+      </>}
+      <div className="table-level"><span>本局打 <b>{rankLabel(gameState?.level || 2)}</b></span><small>房间 {roomState.roomId}</small></div>
+      <div className="center-play absolute left-1/2 -translate-x-1/2 -translate-y-1/2">
         {renderLastHand()}
         {!gameState && (
-            <div className="flex flex-col gap-4 mt-8 items-center">
-               <div className="text-white text-xl">等待好友入座</div>
-               
-               {/* Game Mode Toggle - Only host can change */}
-               <div className="flex items-center gap-4 bg-[#252526] px-4 py-2 rounded-lg border border-[#333333]">
-                   <span className="text-[#9cdcfe] font-bold">模式:</span>
+            <section className="waiting-panel" aria-labelledby="waiting-title">
+               <div className="waiting-kicker">私人牌局 · {roomState.players.filter(Boolean).length}/4 人已入座</div>
+               <h1 id="waiting-title">等朋友到齐，就开局</h1>
+               <p className="waiting-copy">把房间号和密码发给朋友。朋友未到齐也可以开局，空位由电脑补齐。</p>
+               <div className="room-code-row">
+                 <span>房间号</span><strong>{roomState.roomId}</strong>
+               </div>
+               <div className="waiting-mode" aria-label="选择游戏模式">
+                   <span>玩法</span>
                    <button 
                        onClick={() => onSetGameMode?.(GameMode.Normal)}
                        disabled={mySeat !== 0}
-                       className={`px-4 py-1 rounded font-bold transition-all ${
+                       aria-pressed={roomState.gameMode !== GameMode.Skill}
+                       className={`mode-choice ${
                            roomState.gameMode !== GameMode.Skill 
-                               ? 'bg-blue-600 text-white' 
-                               : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
-                       } ${mySeat !== 0 ? 'cursor-not-allowed opacity-70' : ''}`}
+                               ? 'mode-selected' : ''
+                       }`}
                    >
-                       普通
+                       经典掼蛋
                    </button>
                    <button 
                        onClick={() => onSetGameMode?.(GameMode.Skill)}
                        disabled={mySeat !== 0}
-                       className={`px-4 py-1 rounded font-bold transition-all ${
+                       aria-pressed={roomState.gameMode === GameMode.Skill}
+                       className={`mode-choice ${
                            roomState.gameMode === GameMode.Skill 
-                               ? 'bg-purple-600 text-white' 
-                               : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
-                       } ${mySeat !== 0 ? 'cursor-not-allowed opacity-70' : ''}`}
+                               ? 'mode-selected' : ''
+                       }`}
                    >
-                       技能
+                       技能掼蛋
                    </button>
                </div>
                {roomState.gameMode === GameMode.Skill && (
-                   <div className="text-purple-400 text-sm">技能模式: 每人开局获得2张技能卡</div>
+                   <p className="mode-note">技能玩法：每人开局获得两张技能卡</p>
                )}
-               
-               {me.player && !me.player.isReady && (
-                   <button onClick={onReady} className="bg-blue-500 text-white px-6 py-2 rounded font-bold">准备</button>
-               )}
-               {me.player && me.player.seatIndex === 0 && (
-                   <button onClick={onStart} className="bg-yellow-500 text-black px-6 py-2 rounded font-bold">房主开局</button>
-               )}
-            </div>
+               <div className="waiting-actions">
+                 {me.player && !me.player.isReady ? (
+                   <button onClick={onReady} className="ready-action">我准备好了</button>
+                 ) : (
+                   <span className="ready-state">✓ 你已准备</span>
+                 )}
+                 {me.player?.seatIndex === 0 ? (
+                   <button onClick={onStart} className="start-action">房主开局</button>
+                 ) : (
+                   <span className="host-state">等待房主开始</span>
+                 )}
+               </div>
+               <p className="seat-hint">空座位可点击换座 · “搭档”坐在你的对面</p>
+            </section>
         )}
       </div>
 
-      <div className="absolute bottom-0 w-full flex flex-col items-center pb-4 z-20 pointer-events-none">
-        {/* Debug Info - remove in production */}
-        {gameState && (
-            <div className="text-xs text-gray-500 mb-1 pointer-events-auto">
-                [Debug] mySeat={mySeat}, currentTurn={gameState.currentTurn}, phase={gameState.phase}, isMyTurn={String(gameState.currentTurn === mySeat)}, myCards={Array.isArray(gameState.hands[mySeat]) ? (gameState.hands[mySeat] as any[]).length : '?'}
-            </div>
-        )}
-        
+      <div className="hand-dock absolute bottom-0 w-full flex flex-col items-center pb-4 z-20 pointer-events-none">
+        {gameState && <div className={`turn-banner ${isMyTurn ? 'your-turn' : ''}`} role="status">
+          {gameState.phase === 'Playing' ? (isMyTurn ? '轮到你出牌' : `等待${displayName(roomState.players[gameState.currentTurn]?.name)}出牌`) : gameState.phase === 'Tribute' ? '进贡阶段' : gameState.phase === 'ReturnTribute' ? '还贡阶段' : '本局结算'}
+        </div>}
         {/* Skill Cards Area */}
         {gameState && gameState.gameMode === GameMode.Skill && gameState.mySkillCards && gameState.mySkillCards.length > 0 && (
             <div className="mb-4 pointer-events-auto flex flex-col items-center">
@@ -613,38 +610,17 @@ export const GameTable: React.FC<Props> = ({
             </div>
         )}
 
-        {/* Controls Container */}
-        <div className="mb-8 pointer-events-auto">
-            {gameState && gameState.currentTurn === mySeat && gameState.phase === 'Playing' && (
-                <div className="flex gap-4">
-                    <button 
-                      onClick={toggleViewMode}
-                      className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-full font-bold shadow-lg mr-4"
-                    >
-                      {viewMode === 'normal' ? '切换同花顺视图' : '切换普通视图'}
-                    </button>
-                    <button 
-                      onClick={handleHint}
-                      className="bg-yellow-500 hover:bg-yellow-600 text-black px-4 py-2 rounded-full font-bold shadow-lg mr-4"
-                    >
-                      提示
-                    </button>
-                    <button 
-                      onClick={handlePlay} 
-                      disabled={selectedCardIds.length === 0}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2 rounded-full font-bold shadow-lg disabled:opacity-50"
-                    >
-                      出牌
-                    </button>
-                    <button 
-                      onClick={onPass}
-                      className="bg-red-600 hover:bg-red-700 text-white px-8 py-2 rounded-full font-bold shadow-lg"
-                    >
-                      过
-                    </button>
-                </div>
-            )}
-            
+        <div className="controls-container pointer-events-auto">
+            {gameState?.phase === 'Playing' && <>
+              <div className="action-row">
+                <button onClick={toggleViewMode}>{viewMode === 'normal' ? '同花顺理牌' : '普通理牌'}</button>
+                <button onClick={() => {setSelectedCardIds([]);setHintMessage('');}} disabled={!selectedCardIds.length}>取消选择</button>
+                <button onClick={handleHint} disabled={!isMyTurn}>提示</button>
+                <button className="primary-play" onClick={handlePlay} disabled={!!cannotPlay} aria-describedby="play-feedback">出牌{selectedCardIds.length ? `（${selectedCardIds.length}）` : ''}</button>
+                <button onClick={onPass} disabled={!isMyTurn || !targetHand} title={!targetHand ? '你领出本轮，必须出牌' : '本轮不出'}>不出</button>
+              </div>
+              <p id="play-feedback" className="play-feedback" aria-live="polite">{hintMessage || cannotPlay || `已选 ${selectedCardIds.length} 张 · ${playableHands.map(handLabel).join(' / ')}`}{isMyTurn && !targetHand ? ' · 本轮由你领出' : ''}</p>
+            </>}
             {amIPaying && (
                 <div className="flex gap-4">
                    <div className="text-yellow-400 font-bold text-xl animate-pulse">
@@ -661,7 +637,7 @@ export const GameTable: React.FC<Props> = ({
         </div>
 
         {/* Hand Area - Compact Grid */}
-        <div className={`live-hand px-8 flex items-end justify-center pointer-events-auto transition-all duration-300 ${viewMode === 'normal' ? 'h-32 -space-x-8' : 'h-64 gap-1'}`}>
+        <div style={{"--hand-gaps": Math.max(1, sortedHand.length - 1)} as React.CSSProperties} className={`live-hand px-8 flex items-end justify-center pointer-events-auto transition-all duration-300 ${viewMode === 'normal' ? 'hand-normal' : 'hand-stacked'}`}>
           {viewMode === 'normal' ? (
               // Normal View
               sortedHand.map((card: CardType) => (
@@ -676,7 +652,7 @@ export const GameTable: React.FC<Props> = ({
           ) : (
               // Stacked Matrix View (Compact columns)
               getStackedMatrix().map((col, cIdx) => (
-                  <div key={cIdx} className="relative w-16 h-64 flex-shrink-0">
+                  <div key={cIdx} className="stack-column relative flex-shrink-0">
                       {[Suit.Joker, Suit.Spades, Suit.Hearts, Suit.Clubs, Suit.Diamonds].map((suit, sIdx) => {
                           const cards = col.slots[suit];
                           if (!cards || cards.length === 0) return null;
@@ -686,7 +662,7 @@ export const GameTable: React.FC<Props> = ({
                                 key={card.id} 
                                 className={`absolute transition-transform ${straightFlushIds.has(card.id) ? 'ring-2 ring-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.5)] rounded' : ''}`}
                                 style={{ 
-                                    bottom: `${(4 - sIdx) * 30 + (idx * 5)}px`, 
+                                    bottom: `${(4 - sIdx) * 42 + (idx * 15)}px`, 
                                     zIndex: sIdx * 10 + idx 
                                 }}
                               >
@@ -694,7 +670,6 @@ export const GameTable: React.FC<Props> = ({
                                     card={card} 
                                     selected={selectedCardIds.includes(card.id)}
                                     onClick={() => toggleSelect(card.id)}
-                                    small 
                                     isHighlighted={highlightedCardIds.has(card.id)}
                                 />
                               </div>
@@ -714,7 +689,7 @@ export const GameTable: React.FC<Props> = ({
               </div>
             </div>
           )}
-          <div className="text-white font-bold mt-2">{me.player?.name} （我）</div>
+          <div className="text-white font-bold mt-2">{displayName(me.player?.name)} （我）</div>
         </div>
       </div>
       
@@ -724,7 +699,7 @@ export const GameTable: React.FC<Props> = ({
               <div className="text-2xl mb-4">
                   获胜顺序: {gameState.winners.map(w => {
                       const p = roomState.players.find(pl => pl && pl.seatIndex === w);
-                      return p ? p.name : `Seat ${w}`;
+                      return p ? displayName(p.name) : `座位 ${w + 1}`;
                   }).join(' → ')}
               </div>
               {gameState.teamLevels && (
@@ -756,7 +731,7 @@ export const GameTable: React.FC<Props> = ({
                           >
                               <div className="text-lg">{getHandDescription(hand, gameState.level)}</div>
                               <div className="text-sm text-gray-400 mt-1">
-                                  {hand.type} - 值: {hand.value}
+                                  {handLabel(hand)}
                                   {hand.bombCount && ` (${hand.bombCount}张炸弹)`}
                               </div>
                           </button>
@@ -787,33 +762,16 @@ export const GameTable: React.FC<Props> = ({
       )}
       
       {/* Game History Window */}
-      {gameState && gameState.history && (
+      {showHistory && (
           <GameHistory
-              history={gameState.history}
-              currentRound={gameState.currentRound || 1}
+              history={gameState?.history || []}
+              currentRound={gameState?.currentRound || 1}
               isOpen={showHistory}
               onClose={() => setShowHistory(false)}
           />
       )}
       
-      {/* History Button (floating) */}
-      {gameState && (
-          <button
-              onClick={() => setShowHistory(true)}
-              className="fixed top-4 right-4 z-40 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow-lg font-medium transition flex items-center gap-2"
-              title="查看游戏历史记录"
-          >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              历史记录
-              {gameState.history && gameState.history.length > 0 && (
-                  <span className="bg-red-500 text-xs px-2 py-0.5 rounded-full">
-                      {gameState.history.length}
-                  </span>
-              )}
-          </button>
-      )}
+
     </div>
   );
 };
