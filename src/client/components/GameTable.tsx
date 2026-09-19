@@ -24,21 +24,19 @@ interface Props {
   onSetGameMode?: (mode: GameMode) => void;
   onUseSkill?: (skillId: string, targetSeat?: number) => void;
   onForceEndGame?: () => void;
+  mobileMode: boolean;
+  onToggleMobileMode: () => void;
 }
 
 export const GameTable: React.FC<Props> = ({ 
   gameState, roomState, mySeat, onPlay, onPass, onReady, onStart,
   onTribute, onReturnTribute, chatMessages, onSendChat, onSwitchSeat,
-  onSetGameMode, onUseSkill, onForceEndGame
+  onSetGameMode, onUseSkill, onForceEndGame, mobileMode, onToggleMobileMode
 }) => {
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [viewMode, setViewMode] = useState<'normal' | 'stacked'>('stacked');
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const musicTimerRef = useRef<number | null>(null);
-  const musicStepRef = useRef(0);
-  const [musicOn, setMusicOn] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   
   // Common emojis for quick selection
@@ -66,50 +64,6 @@ export const GameTable: React.FC<Props> = ({
   useEffect(() => {
     const close = (e: KeyboardEvent) => { if (e.key === 'Escape') {setShowChat(false);setShowHistory(false);setShowRoomMenu(false);} };
     window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close);
-  }, []);
-
-  const stopMusic = () => {
-    if (musicTimerRef.current !== null) window.clearInterval(musicTimerRef.current);
-    musicTimerRef.current = null;
-    audioContextRef.current?.close();
-    audioContextRef.current = null;
-    setMusicOn(false);
-  };
-
-  const startMusic = () => {
-    const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextClass) return;
-    const context = new AudioContextClass();
-    audioContextRef.current = context;
-    const notes = [261.63, 329.63, 392, 440, 392, 329.63, 293.66, 329.63];
-    const playNote = () => {
-      if (context.state === 'closed') return;
-      const now = context.currentTime;
-      const frequency = notes[musicStepRef.current % notes.length];
-      musicStepRef.current += 1;
-      const gain = context.createGain();
-      const tone = context.createOscillator();
-      const warmth = context.createOscillator();
-      tone.type = 'sine';
-      warmth.type = 'triangle';
-      tone.frequency.value = frequency;
-      warmth.frequency.value = frequency / 2;
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(0.035, now + 0.7);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 3.8);
-      tone.connect(gain); warmth.connect(gain); gain.connect(context.destination);
-      tone.start(now); warmth.start(now);
-      tone.stop(now + 4); warmth.stop(now + 4);
-    };
-    void context.resume().then(playNote);
-    musicTimerRef.current = window.setInterval(playNote, 3200);
-    setMusicOn(true);
-  };
-
-  const toggleMusic = () => musicOn ? stopMusic() : startMusic();
-  useEffect(() => () => {
-    if (musicTimerRef.current !== null) window.clearInterval(musicTimerRef.current);
-    audioContextRef.current?.close();
   }, []);
 
   
@@ -484,7 +438,7 @@ export const GameTable: React.FC<Props> = ({
   const stackedColumns = getStackedMatrix();
 
   return (
-    <div className="game-table relative w-full h-screen overflow-hidden flex items-center justify-center">
+    <div className={`game-table relative w-full h-screen overflow-hidden flex items-center justify-center ${mobileMode ? 'mobile-layout' : ''}`}>
       <div className="absolute inset-20 border-2 border-[#333333] rounded-xl opacity-50 pointer-events-none"></div>
 
       <PlayerArea data={top} pos="top-4 left-1/2 -translate-x-1/2" />
@@ -492,11 +446,12 @@ export const GameTable: React.FC<Props> = ({
       <PlayerArea data={right} pos="right-8 top-1/2 -translate-y-1/2" />
       
       <nav className="table-tools" aria-label="房间工具">
-        <button aria-pressed={musicOn} onClick={toggleMusic}>{musicOn ? '音乐：开' : '音乐：关'}</button>
+        <button aria-pressed={mobileMode} onClick={onToggleMobileMode}>手机模式{mobileMode?' ✓':''}</button>
         <button aria-expanded={showChat} onClick={() => {setShowChat(!showChat);setShowHistory(false);setShowRoomMenu(false);}}>聊天</button>
         <button aria-expanded={showHistory} onClick={() => {setShowHistory(!showHistory);setShowChat(false);setShowRoomMenu(false);}}>历史记录</button>
         <button aria-expanded={showRoomMenu} onClick={() => {setShowRoomMenu(!showRoomMenu);setShowChat(false);setShowHistory(false);}}>房间菜单</button>
       </nav>
+      {mobileMode && <div className="rotate-tip" role="status">横屏玩，牌面更清楚</div>}
       {showRoomMenu && <section className="room-menu" aria-label="房间菜单">
         <strong>房间 {roomState.roomId}</strong><p>房间凭密码加入</p>
         {mySeat === 0 && gameState && <button className="danger-action" onClick={() => {if(window.confirm('确定结束当前对局？本场进度将丢失，所有玩家返回等待区。')){onForceEndGame?.();setShowRoomMenu(false);}}}>结束当前对局</button>}

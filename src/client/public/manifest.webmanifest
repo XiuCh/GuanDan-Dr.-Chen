@@ -1,0 +1,14 @@
+{
+  "name": "老中医掼蛋房",
+  "short_name": "掼蛋房",
+  "description": "适合手机和电脑的私人在线掼蛋牌局",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#092621",
+  "theme_color": "#0c302b",
+  "icons": [
+    { "src": "/app-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

@@ -18,6 +18,16 @@ function App() {
   
   const [preview, setPreview] = useState(false);
   const [showFakeIDE, setShowFakeIDE] = useState(false);
+  const [mobileMode, setMobileMode] = useState(() => {
+    const saved = localStorage.getItem('guandan-mobile-mode');
+    return saved === null ? window.matchMedia('(max-width: 900px)').matches : saved === 'true';
+  });
+
+  const toggleMobileMode = () => setMobileMode(value => !value);
+  useEffect(() => {
+    localStorage.setItem('guandan-mobile-mode', String(mobileMode));
+    document.documentElement.classList.toggle('mobile-mode', mobileMode);
+  }, [mobileMode]);
 
   useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
@@ -44,7 +54,7 @@ function App() {
   }, []);
 
   return (
-    <div className="bg-[#1e1e1e] min-h-screen text-gray-300">
+    <div className={`app-shell bg-[#1e1e1e] min-h-screen text-gray-300 ${mobileMode ? 'is-mobile-mode' : ''}`}>
       {showFakeIDE && <FakeIDE />}
       
       {error && (
@@ -54,7 +64,7 @@ function App() {
       )}
 
       {preview ? <TablePreview onClose={() => setPreview(false)} /> : !inRoom ? (
-        <Lobby onJoin={actions.joinRoom} onPreview={() => setPreview(true)} />
+        <Lobby onJoin={actions.joinRoom} onPreview={() => setPreview(true)} mobileMode={mobileMode} onToggleMobileMode={toggleMobileMode} />
       ) : (
           roomState && (
             <GameTable 
@@ -73,6 +83,8 @@ function App() {
               onSetGameMode={actions.setGameMode}
               onUseSkill={actions.useSkill}
               onForceEndGame={actions.forceEndGame}
+              mobileMode={mobileMode}
+              onToggleMobileMode={toggleMobileMode}
             />
         )
       )}
