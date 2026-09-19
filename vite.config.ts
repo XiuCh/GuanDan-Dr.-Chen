@@ -5,6 +5,7 @@ import path from 'path'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+  define: { __GAME_SERVER__: JSON.stringify(process.env.GAME_SERVER || '') },
   root: 'src/client',
   build: {
     outDir: '../../dist/client',

@@ -396,8 +396,8 @@ export const GameTable: React.FC<Props> = ({
                  <span className="text-red-500 text-xs font-bold bg-white px-1 rounded animate-pulse">OFF</span>
              )}
          </div>
-         {gameState && <div className="text-yellow-400">Cards: {data.handCount}</div>}
-         {data.player && data.player.isReady && !gameState && <div className="text-green-400 text-sm">Ready</div>}
+         {gameState && <div className="text-yellow-400">剩余 {data.handCount} 张</div>}
+         {data.player && data.player.isReady && !gameState && <div className="text-green-400 text-sm">已准备</div>}
          
          {/* Show current round action */}
          {gameState && action && (
@@ -414,7 +414,7 @@ export const GameTable: React.FC<Props> = ({
          )}
          
          {gameState && gameState.currentTurn === data.seat && !action && (
-             <div className="animate-bounce text-red-500 font-bold mt-2">Thinking...</div>
+             <div className="animate-bounce text-red-500 font-bold mt-2">思考中…</div>
          )}
       </div>
     );
@@ -459,7 +459,7 @@ export const GameTable: React.FC<Props> = ({
   };
 
   return (
-    <div className="relative w-full h-screen bg-[#1e1e1e] overflow-hidden flex items-center justify-center font-mono">
+    <div className="game-table relative w-full h-screen overflow-hidden flex items-center justify-center">
       <div className="absolute inset-20 border-2 border-[#333333] rounded-xl opacity-50 pointer-events-none"></div>
 
       <PlayerArea data={top} pos="top-4 left-1/2 -translate-x-1/2" />
@@ -467,7 +467,7 @@ export const GameTable: React.FC<Props> = ({
       <PlayerArea data={right} pos="right-8 top-1/2 -translate-y-1/2" />
       
       {/* Chat Box */}
-      <div className="absolute top-4 right-4 w-72 h-56 bg-[#252526] border border-[#333333] rounded flex flex-col pointer-events-auto z-10 shadow-lg">
+      <div className="table-chat absolute top-4 right-4 w-72 h-56 bg-[#252526] border border-[#333333] rounded flex flex-col pointer-events-auto z-10 shadow-lg">
           <div className="flex-1 overflow-y-auto p-2 text-sm text-[#d4d4d4] scrollbar-thin">
               {chatMessages.map((msg, i) => (
                   <div key={i} className="mb-1">
@@ -543,7 +543,7 @@ export const GameTable: React.FC<Props> = ({
         {renderLastHand()}
         {!gameState && (
             <div className="flex flex-col gap-4 mt-8 items-center">
-               <div className="text-white text-xl">Waiting for players...</div>
+               <div className="text-white text-xl">等待好友入座</div>
                
                {/* Game Mode Toggle - Only host can change */}
                <div className="flex items-center gap-4 bg-[#252526] px-4 py-2 rounded-lg border border-[#333333]">
@@ -579,7 +579,7 @@ export const GameTable: React.FC<Props> = ({
                    <button onClick={onReady} className="bg-blue-500 text-white px-6 py-2 rounded font-bold">准备</button>
                )}
                {me.player && me.player.seatIndex === 0 && (
-                   <button onClick={onStart} className="bg-yellow-500 text-black px-6 py-2 rounded font-bold">开始游戏 (Host)</button>
+                   <button onClick={onStart} className="bg-yellow-500 text-black px-6 py-2 rounded font-bold">房主开局</button>
                )}
             </div>
         )}
@@ -661,7 +661,7 @@ export const GameTable: React.FC<Props> = ({
         </div>
 
         {/* Hand Area - Compact Grid */}
-        <div className={`px-8 flex items-end justify-center pointer-events-auto transition-all duration-300 ${viewMode === 'normal' ? 'h-32 -space-x-8' : 'h-64 gap-1'}`}>
+        <div className={`live-hand px-8 flex items-end justify-center pointer-events-auto transition-all duration-300 ${viewMode === 'normal' ? 'h-32 -space-x-8' : 'h-64 gap-1'}`}>
           {viewMode === 'normal' ? (
               // Normal View
               sortedHand.map((card: CardType) => (
@@ -714,7 +714,7 @@ export const GameTable: React.FC<Props> = ({
               </div>
             </div>
           )}
-          <div className="text-white font-bold mt-2">{me.player?.name} (Me)</div>
+          <div className="text-white font-bold mt-2">{me.player?.name} （我）</div>
         </div>
       </div>
       

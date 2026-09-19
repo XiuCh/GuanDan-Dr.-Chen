@@ -43,44 +43,15 @@ export const Card: React.FC<Props> = ({ card, selected, onClick, small, isHighli
   const isRed = card.suit === Suit.Hearts || card.suit === Suit.Diamonds || card.rank === Rank.BigJoker;
   const isJoker = card.suit === Suit.Joker;
   
-  const baseClasses = "relative bg-white rounded shadow-md border border-gray-300 flex flex-col justify-between select-none cursor-pointer transition-transform";
-  const sizeClasses = small 
-    ? "w-8 h-12 text-xs p-1" 
-    : "w-16 h-24 text-base p-2 hover:-translate-y-2";
-  const selectClasses = selected ? "ring-2 ring-blue-500 -translate-y-4" : "";
-  const colorClass = isRed ? "text-red-600" : "text-black";
-  // Highlight animation for new cards - glowing green border with pulse
-  const highlightClasses = isHighlighted 
-    ? "ring-4 ring-green-400 shadow-[0_0_15px_rgba(74,222,128,0.7)] animate-pulse" 
-    : "";
-
-  if (isJoker) {
-     return (
-        <div 
-          className={`${baseClasses} ${sizeClasses} ${selectClasses} ${highlightClasses} ${colorClass}`}
-          onClick={onClick}
-        >
-           <div className="text-center w-full h-full flex items-center justify-center font-bold writing-vertical">
-               {card.rank === Rank.SmallJoker ? '小王' : '大王'}
-           </div>
-        </div>
-     );
-  }
-
-  return (
-    <div 
-      className={`${baseClasses} ${sizeClasses} ${selectClasses} ${highlightClasses} ${colorClass}`}
-      onClick={onClick}
-    >
-      <div className="font-bold text-left leading-none">{getRankLabel(card.rank)}</div>
-      <div className="absolute inset-0 flex items-center justify-center text-2xl opacity-20 pointer-events-none">
-          {getSuitSymbol(card.suit)}
-      </div>
-      <div className="text-right leading-none self-end">{getSuitSymbol(card.suit)}</div>
-      
-      {card.isLevelCard && (
-          <div className="absolute top-0 right-0 w-2 h-2 bg-yellow-400 rounded-full"></div>
-      )}
-    </div>
-  );
+  const symbol = getSuitSymbol(card.suit);
+  const label = isJoker ? (card.rank === Rank.BigJoker ? '大王' : '小王') : getRankLabel(card.rank);
+  return <button type="button" disabled={!onClick} onClick={onClick}
+    aria-label={`${label}${isJoker ? '' : symbol}${card.isWild ? ' 万能牌' : ''}`}
+    aria-pressed={onClick ? !!selected : undefined}
+    className={`playing-card ${small ? 'card-small' : ''} ${isRed ? 'card-red' : ''} ${selected ? 'card-selected' : ''} ${isHighlighted ? 'card-highlight' : ''}`}>
+    <span className="card-corner"><strong>{label}</strong><span>{isJoker ? '✦' : symbol}</span></span>
+    <span className="card-center" aria-hidden="true">{isJoker ? '✦' : symbol}</span>
+    <span className="card-corner card-bottom" aria-hidden="true"><strong>{label}</strong><span>{isJoker ? '✦' : symbol}</span></span>
+    {card.isLevelCard && <span className="card-level">{card.isWild ? '万能' : '级'}</span>}
+  </button>;
 };

@@ -1,106 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import backgroundImage from '../assets/guandan-background.jpg';
-
-interface Props {
-  onJoin: (name: string, roomId: string, password: string) => void;
-}
-
-export const Lobby: React.FC<Props> = ({ onJoin }) => {
-  const [name, setName] = useState('');
-  const [roomId, setRoomId] = useState('');
-  const [password, setPassword] = useState('');
-
-  const handleSubmit = (event: React.FormEvent) => {
-    event.preventDefault();
-    onJoin(name.trim(), roomId.trim(), password);
-  };
-
-  return (
-    <main
-      className="relative flex min-h-[100dvh] flex-col items-center justify-center bg-cover bg-center px-4 py-8 text-gray-200"
-      style={{
-        backgroundImage: `linear-gradient(rgba(10, 8, 5, 0.58), rgba(10, 8, 5, 0.78)), url(${backgroundImage})`
-      }}
-    >
-      <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/35" aria-hidden="true" />
-
-      <h1 className="relative z-10 mb-3 text-center font-serif text-3xl font-bold tracking-[0.12em] text-[#f1d5a3] drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] sm:text-5xl">
-        老中医掼蛋房
-      </h1>
-      <p className="relative z-10 mb-7 max-w-sm text-center text-sm leading-6 text-gray-100 drop-shadow-[0_1px_3px_rgba(0,0,0,1)]">
-        第一位玩家使用房间号和密码创建房间，其他三位玩家使用相同信息加入。
-      </p>
-
-      <form
-        onSubmit={handleSubmit}
-        className="relative z-10 flex w-full max-w-sm flex-col gap-5 rounded-xl border border-[#c49a62]/40 bg-[#17130f]/90 p-6 shadow-2xl backdrop-blur-sm sm:p-8"
-      >
-        <div>
-          <label className="mb-2 block text-sm font-bold text-[#d9ad75]" htmlFor="player-name">
-            玩家昵称
-          </label>
-          <input
-            id="player-name"
-            type="text"
-            value={name}
-            onChange={event => setName(event.target.value)}
-            className="w-full rounded border border-[#6f5942] bg-black/55 p-3 text-base text-white placeholder:text-gray-400 focus:border-[#d9ad75] focus:outline-none"
-            placeholder="请输入昵称"
-            autoComplete="nickname"
-            maxLength={12}
-            required
-          />
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-bold text-[#d9ad75]" htmlFor="room-id">
-            私人房间号
-          </label>
-          <input
-            id="room-id"
-            type="text"
-            value={roomId}
-            onChange={event => setRoomId(event.target.value)}
-            className="w-full rounded border border-[#6f5942] bg-black/55 p-3 text-base text-white placeholder:text-gray-400 focus:border-[#d9ad75] focus:outline-none"
-            placeholder="例如 GD9284X7"
-            autoCapitalize="characters"
-            autoCorrect="off"
-            minLength={4}
-            maxLength={32}
-            pattern="[A-Za-z0-9_-]+"
-            required
-          />
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-bold text-[#d9ad75]" htmlFor="room-password">
-            房间密码
-          </label>
-          <input
-            id="room-password"
-            type="password"
-            value={password}
-            onChange={event => setPassword(event.target.value)}
-            className="w-full rounded border border-[#6f5942] bg-black/55 p-3 text-base text-white placeholder:text-gray-400 focus:border-[#d9ad75] focus:outline-none"
-            placeholder="4–32 个字符"
-            autoComplete="current-password"
-            minLength={4}
-            maxLength={32}
-            required
-          />
-        </div>
-
-        <button
-          type="submit"
-          className="mt-1 rounded bg-[#9a5f27] py-3 font-bold text-white transition-colors hover:bg-[#b97836] focus:outline-none focus:ring-2 focus:ring-[#d9ad75]"
-        >
-          创建或加入私人房
-        </button>
-
-        <p className="text-center text-xs leading-5 text-gray-500">
-          请只把网址、房间号和密码分享给认识的朋友。
-        </p>
-      </form>
-    </main>
-  );
+import { socket } from '../socket';
+import { Card } from './Card';
+import { Suit, Rank } from '../../shared/types';
+interface Props { onJoin: (name: string, roomId: string, password: string) => void; onPreview: () => void; }
+export const Lobby: React.FC<Props> = ({ onJoin, onPreview }) => {
+ const [name,setName]=useState(''), [roomId,setRoomId]=useState(''), [password,setPassword]=useState('');
+ const [connected,setConnected]=useState(socket.connected);
+ useEffect(()=>{const on=()=>setConnected(true),off=()=>setConnected(false);socket.on('connect',on);socket.on('disconnect',off);return()=>{socket.off('connect',on);socket.off('disconnect',off)}},[]);
+ return <main className="club-lobby" style={{backgroundImage:`linear-gradient(90deg,rgba(6,27,24,.96),rgba(6,27,24,.86)),url(${backgroundImage})`}}>
+ <header className="club-header"><span className="club-mark">掼</span><span>老中医掼蛋房</span><span className="private-label">私人牌局</span></header>
+ <section className="lobby-grid"><div className="lobby-intro"><p className="eyebrow">GUANDAN · PRIVATE TABLE</p><h1>好朋友，<br/>坐下来掼一局。</h1><p className="intro-copy">两副牌，四个人。<br/>熟悉的搭档，熟悉的默契。</p><div className="lobby-cards" aria-label="新版扑克牌展示">{[Rank.Ace,Rank.King,Rank.Queen,Rank.Jack].map((rank,i)=><Card key={rank} card={{id:String(i),rank,suit:i%2?Suit.Hearts:Suit.Spades}}/>)}</div><button className="text-button" onClick={onPreview}>先看看新版牌桌 ↗</button></div>
+ <form className="join-panel" onSubmit={e=>{e.preventDefault();onJoin(name.trim(),roomId.trim(),password)}}><p className="eyebrow">INVITE ONLY</p><h2>入座，开一桌</h2><p className="panel-help">第一位玩家创建房间，朋友使用相同房间号和密码加入。</p>
+ <label>玩家昵称<input value={name} onChange={e=>setName(e.target.value)} placeholder="朋友怎么称呼你？" autoComplete="nickname" maxLength={12} required/></label>
+ <label>私人房间号<input value={roomId} onChange={e=>setRoomId(e.target.value)} placeholder="4–32 位字母、数字、下划线或短横线" minLength={4} maxLength={32} pattern="[A-Za-z0-9_-]+" required/></label>
+ <label>房间密码<input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="输入约好的密码" minLength={4} maxLength={32} autoComplete="current-password" required/></label>
+ <button className="gold-button" type="submit" disabled={!connected}>创建 / 加入私人房</button>
+ <p className="connection-note" role="status">{connected?'已连接游戏服务':'正在连接游戏服务，首次唤醒可能需要约一分钟…'}</p><p className="privacy-note">房间不公开展示 · 仅凭房间号与密码加入</p></form></section>
+ <footer className="club-footer"><span>老中医掼蛋房</span><span>好友之间，牌桌见。</span></footer></main>
 };
