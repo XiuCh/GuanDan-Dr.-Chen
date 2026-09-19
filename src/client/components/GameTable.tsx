@@ -33,8 +33,12 @@ export const GameTable: React.FC<Props> = ({
 }) => {
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
   const [chatInput, setChatInput] = useState('');
-  const [viewMode, setViewMode] = useState<'normal' | 'stacked'>('normal'); 
+  const [viewMode, setViewMode] = useState<'normal' | 'stacked'>('stacked');
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const musicTimerRef = useRef<number | null>(null);
+  const musicStepRef = useRef(0);
+  const [musicOn, setMusicOn] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   
   // Common emojis for quick selection
@@ -62,6 +66,50 @@ export const GameTable: React.FC<Props> = ({
   useEffect(() => {
     const close = (e: KeyboardEvent) => { if (e.key === 'Escape') {setShowChat(false);setShowHistory(false);setShowRoomMenu(false);} };
     window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close);
+  }, []);
+
+  const stopMusic = () => {
+    if (musicTimerRef.current !== null) window.clearInterval(musicTimerRef.current);
+    musicTimerRef.current = null;
+    audioContextRef.current?.close();
+    audioContextRef.current = null;
+    setMusicOn(false);
+  };
+
+  const startMusic = () => {
+    const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const context = new AudioContextClass();
+    audioContextRef.current = context;
+    const notes = [261.63, 329.63, 392, 440, 392, 329.63, 293.66, 329.63];
+    const playNote = () => {
+      if (context.state === 'closed') return;
+      const now = context.currentTime;
+      const frequency = notes[musicStepRef.current % notes.length];
+      musicStepRef.current += 1;
+      const gain = context.createGain();
+      const tone = context.createOscillator();
+      const warmth = context.createOscillator();
+      tone.type = 'sine';
+      warmth.type = 'triangle';
+      tone.frequency.value = frequency;
+      warmth.frequency.value = frequency / 2;
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.035, now + 0.7);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 3.8);
+      tone.connect(gain); warmth.connect(gain); gain.connect(context.destination);
+      tone.start(now); warmth.start(now);
+      tone.stop(now + 4); warmth.stop(now + 4);
+    };
+    void context.resume().then(playNote);
+    musicTimerRef.current = window.setInterval(playNote, 3200);
+    setMusicOn(true);
+  };
+
+  const toggleMusic = () => musicOn ? stopMusic() : startMusic();
+  useEffect(() => () => {
+    if (musicTimerRef.current !== null) window.clearInterval(musicTimerRef.current);
+    audioContextRef.current?.close();
   }, []);
 
   
@@ -140,6 +188,7 @@ export const GameTable: React.FC<Props> = ({
   const me = getPlayerAt(0);
 
   const myHandOriginal = gameState ? (gameState.hands[mySeat] as CardType[]) : [];
+  const handSignature = myHandOriginal.map(card => card.id).join('|');
   const [sortedHand, setSortedHand] = useState<CardType[]>([]);
   const [straightFlushIds, setStraightFlushIds] = useState<Set<string>>(new Set());
 
@@ -193,7 +242,7 @@ export const GameTable: React.FC<Props> = ({
           setSortedHand([]);
           setStraightFlushIds(new Set());
       }
-  }, [myHandOriginal, gameState?.level]); 
+  }, [handSignature, gameState?.level]);
 
   const toggleViewMode = () => {
       setViewMode(prev => prev === 'normal' ? 'stacked' : 'normal');
@@ -422,41 +471,17 @@ export const GameTable: React.FC<Props> = ({
 
   const getStackedMatrix = () => {
       if (!gameState) return [];
-      
-      const matrix: { [key: number]: { [key: number]: CardType } } = {};
-      const suits = [Suit.Spades, Suit.Hearts, Suit.Clubs, Suit.Diamonds, Suit.Joker];
-      
-      const presentValues = new Set<number>();
-      
-      sortedHand.forEach(c => {
-          const val = getLogicValue(c.rank, gameState.level);
-          presentValues.add(val);
-      });
-
-      const sortedVals = Array.from(presentValues).sort((a, b) => b - a);
-      
-      return sortedVals.map(val => {
-          const cardsOfRank = sortedHand.filter(c => getLogicValue(c.rank, gameState.level) === val);
-          
-          const slots: { [key: number]: CardType[] } = {
-              [Suit.Joker]: [],
-              [Suit.Spades]: [],
-              [Suit.Hearts]: [],
-              [Suit.Clubs]: [],
-              [Suit.Diamonds]: []
-          };
-          
-          cardsOfRank.forEach(c => {
-             if (c.rank === Rank.SmallJoker || c.rank === Rank.BigJoker) {
-                 slots[Suit.Joker].push(c);
-             } else {
-                 slots[c.suit].push(c);
-             }
-          });
-          
-          return { val, slots };
-      });
+      const groups = new Map<number, CardType[]>();
+      sortedHand.forEach(card => groups.set(card.rank, [...(groups.get(card.rank) || []), card]));
+      return Array.from(groups.entries())
+        .sort(([rankA], [rankB]) => getLogicValue(rankB, gameState.level) - getLogicValue(rankA, gameState.level))
+        .map(([rank, cards]) => ({
+          rank,
+          cards: cards.sort((a, b) => a.suit - b.suit || Number(b.isWild) - Number(a.isWild))
+        }));
   };
+
+  const stackedColumns = getStackedMatrix();
 
   return (
     <div className="game-table relative w-full h-screen overflow-hidden flex items-center justify-center">
@@ -467,6 +492,7 @@ export const GameTable: React.FC<Props> = ({
       <PlayerArea data={right} pos="right-8 top-1/2 -translate-y-1/2" />
       
       <nav className="table-tools" aria-label="房间工具">
+        <button aria-pressed={musicOn} onClick={toggleMusic}>{musicOn ? '音乐：开' : '音乐：关'}</button>
         <button aria-expanded={showChat} onClick={() => {setShowChat(!showChat);setShowHistory(false);setShowRoomMenu(false);}}>聊天</button>
         <button aria-expanded={showHistory} onClick={() => {setShowHistory(!showHistory);setShowChat(false);setShowRoomMenu(false);}}>历史记录</button>
         <button aria-expanded={showRoomMenu} onClick={() => {setShowRoomMenu(!showRoomMenu);setShowChat(false);setShowHistory(false);}}>房间菜单</button>
@@ -613,7 +639,7 @@ export const GameTable: React.FC<Props> = ({
         <div className="controls-container pointer-events-auto">
             {gameState?.phase === 'Playing' && <>
               <div className="action-row">
-                <button onClick={toggleViewMode}>{viewMode === 'normal' ? '同花顺理牌' : '普通理牌'}</button>
+                <button onClick={toggleViewMode}>{viewMode === 'normal' ? '同点叠放' : '展开排列'}</button>
                 <button onClick={() => {setSelectedCardIds([]);setHintMessage('');}} disabled={!selectedCardIds.length}>取消选择</button>
                 <button onClick={handleHint} disabled={!isMyTurn}>提示</button>
                 <button className="primary-play" onClick={handlePlay} disabled={!!cannotPlay} aria-describedby="play-feedback">出牌{selectedCardIds.length ? `（${selectedCardIds.length}）` : ''}</button>
@@ -637,7 +663,7 @@ export const GameTable: React.FC<Props> = ({
         </div>
 
         {/* Hand Area - Compact Grid */}
-        <div style={{"--hand-gaps": Math.max(1, sortedHand.length - 1)} as React.CSSProperties} className={`live-hand px-8 flex items-end justify-center pointer-events-auto transition-all duration-300 ${viewMode === 'normal' ? 'hand-normal' : 'hand-stacked'}`}>
+        <div style={{"--hand-gaps": Math.max(1, sortedHand.length - 1), "--rank-gaps": Math.max(1, stackedColumns.length - 1)} as React.CSSProperties} className={`live-hand px-8 flex items-end justify-center pointer-events-auto transition-all duration-300 ${viewMode === 'normal' ? 'hand-normal' : 'hand-stacked'}`}>
           {viewMode === 'normal' ? (
               // Normal View
               sortedHand.map((card: CardType) => (
@@ -651,30 +677,22 @@ export const GameTable: React.FC<Props> = ({
               ))
           ) : (
               // Stacked Matrix View (Compact columns)
-              getStackedMatrix().map((col, cIdx) => (
-                  <div key={cIdx} className="stack-column relative flex-shrink-0">
-                      {[Suit.Joker, Suit.Spades, Suit.Hearts, Suit.Clubs, Suit.Diamonds].map((suit, sIdx) => {
-                          const cards = col.slots[suit];
-                          if (!cards || cards.length === 0) return null;
-                          
-                          return cards.map((card, idx) => (
-                              <div 
-                                key={card.id} 
-                                className={`absolute transition-transform ${straightFlushIds.has(card.id) ? 'ring-2 ring-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.5)] rounded' : ''}`}
-                                style={{ 
-                                    bottom: `${(4 - sIdx) * 42 + (idx * 15)}px`, 
-                                    zIndex: sIdx * 10 + idx 
-                                }}
-                              >
-                                <Card 
-                                    card={card} 
-                                    selected={selectedCardIds.includes(card.id)}
-                                    onClick={() => toggleSelect(card.id)}
-                                    isHighlighted={highlightedCardIds.has(card.id)}
-                                />
-                              </div>
-                          ));
-                      })}
+              stackedColumns.map((col) => (
+                  <div key={col.rank} className="rank-stack" aria-label={`${rankLabel(col.rank)}，${col.cards.length} 张`}>
+                      {col.cards.map((card, idx) => (
+                        <div
+                          key={card.id}
+                          className={`rank-card-layer ${straightFlushIds.has(card.id) ? 'ring-2 ring-yellow-400 rounded' : ''}`}
+                          style={{ "--stack-index": idx, zIndex: idx + 1 } as React.CSSProperties}
+                        >
+                          <Card
+                            card={card}
+                            selected={selectedCardIds.includes(card.id)}
+                            onClick={() => toggleSelect(card.id)}
+                            isHighlighted={highlightedCardIds.has(card.id)}
+                          />
+                        </div>
+                      ))}
                   </div>
               ))
           )}

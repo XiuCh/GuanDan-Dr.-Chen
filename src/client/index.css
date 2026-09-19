@@ -50,3 +50,54 @@
 @media(max-width:900px){
   .game-table .live-hand.hand-normal{overflow-x:auto;overflow-y:visible}
 }
+
+/* Rank-grouped hand: every matching number shares one compact vertical stack. */
+.game-table .hand-dock{left:50%;transform:translateX(-50%)}
+.game-table .live-hand.hand-stacked{width:min(92vw,1400px);max-width:none;height:250px;min-height:250px;padding:10px 0 8px;display:flex;align-items:flex-end;justify-content:center;overflow:visible;gap:0}
+.rank-stack{position:relative;flex:0 0 min(80px,calc((100% - 82px)/var(--rank-gaps)));height:230px}
+.rank-card-layer{position:absolute;left:0;bottom:calc(var(--stack-index)*22px);transition:bottom .18s ease,transform .18s ease}
+.rank-stack .playing-card{width:82px;height:116px;border-radius:8px}
+.rank-stack .card-corner,.rank-stack .card-corner strong{font-size:24px}
+.rank-stack .card-center{font-size:43px}
+.table-tools button[aria-pressed=true]{background:#e1c48c;color:#17352b}
+
+@media(max-width:900px){
+  .game-table .live-hand.hand-stacked{width:calc(100vw - 20px);height:220px;min-height:220px;padding-inline:0}
+  .rank-stack{flex-basis:min(58px,calc((100% - 62px)/var(--rank-gaps)));height:202px}
+  .rank-card-layer{bottom:calc(var(--stack-index)*17px)}
+  .rank-stack .playing-card{width:62px;height:92px;padding:4px}
+  .rank-stack .card-corner,.rank-stack .card-corner strong{font-size:20px}
+  .rank-stack .card-center{font-size:34px}
+  .rank-stack .card-bottom{display:none}
+  .game-table .table-tools{flex-wrap:wrap;justify-content:flex-end;max-width:calc(100vw - 150px)}
+}
+
+@media(max-width:900px) and (orientation:landscape){
+  .game-table{height:100svh;min-height:360px}
+  .game-table:before{inset:55px 5% 125px}
+  .game-table .table-level{top:8px;left:10px;padding:6px 10px;font-size:13px;gap:2px}
+  .table-level b{font-size:19px}
+  .game-table .table-level small{display:none}
+  .game-table .table-tools{top:8px;right:10px;max-width:none;flex-wrap:nowrap}
+  .table-tools button{min-height:30px!important;padding:5px 8px;font-size:12px}
+  .game-table .player-seat{min-width:68px;padding:5px}
+  .game-table .player-seat .w-12{width:34px;height:34px}
+  .game-table .player-seat.top-4{top:8px}
+  .game-table .player-seat.top-1\/2{top:31%;min-width:68px}
+  .game-table .player-seat .text-white,.game-table .player-seat .text-yellow-400{font-size:12px}
+  .game-table .center-play{top:31%;max-width:52vw}
+  .last-play{padding:6px 10px;gap:4px;font-size:12px}
+  .last-play .playing-card{width:52px;height:74px}
+  .game-table .hand-dock{padding-bottom:2px}
+  .turn-banner{font-size:12px;padding:4px 14px;margin-bottom:3px}
+  .game-table .action-row{gap:4px;flex-wrap:nowrap;padding:0 4px}
+  .game-table .action-row button,.game-table .action-row button.primary-play{min-height:30px;padding:4px 8px;font-size:12px;min-width:auto}
+  .play-feedback{height:17px;min-height:17px;line-height:17px;margin:1px 0;font-size:11px}
+  .game-table .live-hand.hand-stacked{width:calc(100vw - 18px);height:139px;min-height:139px;padding:2px 0 1px}
+  .rank-stack{flex-basis:min(56px,calc((100% - 58px)/var(--rank-gaps)));height:132px}
+  .rank-card-layer{bottom:calc(var(--stack-index)*7px)}
+  .rank-stack .playing-card{width:58px;height:82px}
+  .rank-stack .card-corner,.rank-stack .card-corner strong{font-size:18px}
+  .rank-stack .card-center{font-size:29px}
+  .game-table .hand-dock>.relative{font-size:12px;line-height:16px}
+}
