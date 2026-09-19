@@ -607,7 +607,7 @@ export const GameTable: React.FC<Props> = ({
                    <span className="host-state">等待房主开始</span>
                  )}
                </div>
-               <p className="seat-hint">空座位可点击换座 · “搭档”坐在你的对面</p>
+               <p className="seat-hint">空座位可点击换座 · “搭档”坐在你的对面 · 电脑难度：中高</p>
             </section>
         )}
       </div>

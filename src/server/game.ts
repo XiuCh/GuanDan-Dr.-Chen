@@ -1141,7 +1141,11 @@ export class Game {
           }
       }
       
-      const bot = new Bot(hand, this.level);
+      const bot = new Bot(hand, this.level, {
+          seatIndex,
+          lastPlayerIndex: this.lastHand?.playerIndex,
+          handCounts: this.hands.map(cards => cards.length)
+      });
       const move = bot.decideMove(this.lastHand ? this.lastHand.hand : null);
       
       console.log(`[Bot] Seat ${seatIndex} decides: ${move ? `Play ${move.length} cards` : 'Pass'}`);

@@ -1,255 +1,219 @@
-import { getHandType, compareHands, sortCards, getLogicValue, isConsecutive } from './rules';
-import { Rank, Card, Hand, HandType } from './types';
+import { compareHands, getHandType, getLogicValue, sortCards } from './rules';
+import { Card, Hand, HandType, Rank, Suit } from './types';
 
+export interface BotContext {
+  seatIndex?: number;
+  lastPlayerIndex?: number;
+  handCounts?: number[];
+}
+
+interface Candidate {
+  cards: Card[];
+  hand: Hand;
+}
+
+/** Medium-high bot that uses only its own cards and public table information. */
 export class Bot {
   cards: Card[];
   level: number;
+  context: BotContext;
 
-  constructor(cards: Card[], level: number) {
-    this.cards = sortCards(cards, level); // Sorted by logic value desc
+  constructor(cards: Card[], level: number, context: BotContext = {}) {
+    this.cards = sortCards(cards, level);
     this.level = level;
+    this.context = context;
   }
 
   decideMove(target: Hand | null): Card[] | null {
-    // Safety check: No cards means no move
-    if (this.cards.length === 0) {
-        console.log('[Bot] No cards left, returning null');
-        return null;
-    }
-    
+    if (!this.cards.length) return null;
+    const candidates = this.getCandidates();
+    if (!candidates.length) return [this.cards[this.cards.length - 1]];
+
     if (!target) {
-      // Free play - MUST return something (cannot pass on free turn)
-      
-      // Priority:
-      // 1. Straight (5) or Tube (6) or Plate (6) - long hands first
-      // 2. Trips with Pair (5)
-      // 3. Trips (3)
-      // 4. Pair (2)
-      // 5. Single (1)
-      
-      // Try Full House
-      const trips = this.getGroups(3);
-      if (trips.length > 0) {
-          // Find a pair for Full House
-          const pair = this.findPairExcluding(trips[0]);
-          if (pair) return [...trips[0], ...pair];
-          return trips[0]; // Or just Trips
-      }
-      
-      const pairs = this.getGroups(2);
-      if (pairs.length > 0) return pairs[0]; // Smallest pair
-      
-      // Last resort: play smallest single card
-      // This handles both 1 card left and multiple different single cards
-      return [this.cards[this.cards.length - 1]];
+      return [...candidates].sort((a, b) => this.leadScore(a) - this.leadScore(b))[0].cards;
     }
 
-    // Must beat target
-    const candidate = this.findBeat(target);
-    if (candidate) return candidate;
+    const playable = candidates.filter(candidate => compareHands(candidate.hand, target) > 0);
+    if (!playable.length) return null;
+    const finishingMove = playable.find(candidate => candidate.cards.length === this.cards.length);
+    if (finishingMove) return finishingMove.cards;
 
-    // Try Bomb
-    // Strategy: Only bomb if target is NOT Bomb/SF/4Kings or is smaller bomb
-    // And if we have enough cards? Or aggressively?
-    // For MVP: Always try to bomb if possible to win turn.
-    const bomb = this.findBomb(target);
-    if (bomb) return bomb;
+    // Keep the lead in the team unless this bot can immediately finish.
+    if (this.isPartner(this.context.lastPlayerIndex)) return null;
 
-    return null; // Pass
+    const ordinary = playable.filter(candidate => !this.isBombFamily(candidate.hand));
+    if (ordinary.length) return ordinary.sort((a, b) => this.followScore(a) - this.followScore(b))[0].cards;
+
+    // Do not waste a bomb on an ordinary trick unless the endgame is urgent.
+    if (!this.isBombFamily(target) && this.cards.length > 8 && this.lowestOpponentCount() > 3) return null;
+    return playable.sort((a, b) => this.followScore(a) - this.followScore(b))[0].cards;
   }
 
-  findBeat(target: Hand): Card[] | null {
-      // Iterate from smallest (end of sorted array) to largest
-      if (target.type === HandType.Single) {
-          for (let i = this.cards.length - 1; i >= 0; i--) {
-              const c = this.cards[i];
-              if (getLogicValue(c.rank, this.level) > target.value) return [c];
-          }
-      }
-      
-      if (target.type === HandType.Pair) {
-          const pairs = this.getGroups(2); // Smallest first
-          for (const pair of pairs) {
-               const val = getLogicValue(pair[0].rank, this.level);
-               if (val > target.value) return pair;
-          }
-      }
-      
-      if (target.type === HandType.Trips) {
-          const trips = this.getGroups(3);
-           for (const t of trips) {
-               const val = getLogicValue(t[0].rank, this.level);
-               if (val > target.value) return t;
-          }
-      }
-      
-      if (target.type === HandType.TripsWithPair) {
-          const trips = this.getGroups(3);
-          for (const t of trips) {
-              const tVal = getLogicValue(t[0].rank, this.level);
-              if (tVal > target.value) {
-                  const pair = this.findPairExcluding(t);
-                  if (pair) return [...t, ...pair];
-              }
-          }
-      }
-      
-      // Basic Straight Logic (5 cards)
-      if (target.type === HandType.Straight) {
-          // Very simple: Check all 5-card windows in unique ranks
-          // Filter non-wilds, unique ranks
-          // Complexity high with Level Card wilds.
-          // Fallback: Pass on straights unless strict match found?
-      }
-      
-      return null;
-  }
-  
-  findPairExcluding(exclude: Card[]): Card[] | null {
-      const excludeIds = exclude.map(c => c.id);
-      const available = this.cards.filter(c => !excludeIds.includes(c.id));
-      
-      // Helper internal
-      const getGrps = (cards: Card[]) => {
-          const grps: Card[][] = [];
-          let cur: Card[] = [];
-          for (const c of cards) {
-              if (cur.length === 0 || getLogicValue(c.rank, this.level) === getLogicValue(cur[0].rank, this.level)) {
-                  cur.push(c);
-              } else {
-                  if (cur.length >= 2) grps.push(cur.slice(0, 2));
-                  cur = [c];
-              }
-          }
-          if (cur.length >= 2) grps.push(cur.slice(0, 2));
-          return grps.reverse(); // Smallest
-      };
-      
-      const pairs = getGrps(available);
-      if (pairs.length > 0) return pairs[0];
-      return null;
-  }
-  
-  findBomb(target?: Hand): Card[] | null {
-      // 1. Check 4 Kings
-      const sj = this.cards.filter(c => c.rank === Rank.SmallJoker);
-      const bj = this.cards.filter(c => c.rank === Rank.BigJoker);
-      let kings: Card[] | null = null;
-      if (sj.length === 2 && bj.length === 2) {
-          kings = [...sj, ...bj];
-      }
+  private getCandidates(): Candidate[] {
+    const candidates: Candidate[] = [];
+    const seen = new Set<string>();
+    const wilds = this.cards.filter(card => card.isWild);
+    const naturals = this.cards.filter(card => !card.isWild);
 
-      // 2. Check Straight Flush (SF)
-      // Hard to detect generic SF. 
-      // Simplified: Check if we have 5 consecutive same suit.
-      // Logic: Group by suit, check consecutive.
-      const sfs: { cards: Card[], value: number }[] = [];
-      const suits = [0,1,2,3]; // Spades, Hearts, Clubs, Diamonds
-      for (const s of suits) {
-          const suitCards = this.cards.filter(c => c.suit === s && !c.isWild && c.rank <= Rank.Ace); // Ignore wild/joker for natural SF
-          // Sort by rank
-          suitCards.sort((a,b) => a.rank - b.rank);
-          // Check windows of 5
-          for(let i=0; i<=suitCards.length-5; i++) {
-              const window = suitCards.slice(i, i+5);
-              const ranks = window.map(c => c.rank);
-              if (isConsecutive(ranks)) {
-                  sfs.push({ cards: window, value: ranks[4] }); // Top value
-              }
-          }
-      }
-      // Sort SFs by value ascending
-      sfs.sort((a,b) => a.value - b.value);
+    const add = (cards: Card[]) => {
+      const unique = Array.from(new Map(cards.map(card => [card.id, card])).values());
+      if (!unique.length || unique.length !== cards.length) return;
+      const hand = getHandType(unique, this.level);
+      if (!hand) return;
+      const key = unique.map(card => card.id).sort().join('|');
+      if (seen.has(key)) return;
+      seen.add(key);
+      candidates.push({ cards: unique, hand });
+    };
 
-      // 3. Normal Bombs (4+ cards)
-      const bombs = this.getBombs(); // Smallest first
+    add(this.cards);
+    this.cards.forEach(card => add([card]));
 
-      // Comparison Logic
-      if (!target) {
-          // Play smallest bomb?
-          if (bombs.length > 0) return bombs[0].cards;
-          if (sfs.length > 0) return sfs[0].cards;
-          if (kings) return kings;
-          return null;
+    const valueGroups = new Map<number, Card[]>();
+    naturals.forEach(card => {
+      const value = getLogicValue(card.rank, this.level);
+      valueGroups.set(value, [...(valueGroups.get(value) || []), card]);
+    });
+
+    // Pairs, trips, and bombs, using wild cards only when they complete a structure.
+    valueGroups.forEach(group => {
+      for (const size of [2, 3]) {
+        if (group.length >= size) add(group.slice(0, size));
+        else if (group.length + wilds.length >= size) add([...group, ...wilds.slice(0, size - group.length)]);
       }
-      
-      // Target exists
-      const targetIsBomb = target.type === HandType.Bomb;
-      const targetIsSF = target.type === HandType.StraightFlush;
-      const targetIsKings = target.type === HandType.FourKings;
-      
-      // If target is normal hand (not bomb family)
-      if (!targetIsBomb && !targetIsSF && !targetIsKings) {
-          if (bombs.length > 0) return bombs[0].cards;
-          if (sfs.length > 0) return sfs[0].cards;
-          if (kings) return kings;
-          return null;
+      const maximum = Math.min(8, group.length + wilds.length);
+      for (let size = 4; size <= maximum; size += 1) {
+        const naturalCount = Math.min(group.length, size);
+        add([...group.slice(0, naturalCount), ...wilds.slice(0, size - naturalCount)]);
       }
-      
-      // Target is Bomb Family
-      if (targetIsKings) return null; // Can't beat 4 Kings
-      
-      if (targetIsSF) {
-          // Can beat with bigger SF or 4 Kings
-          const targetVal = target.value;
-          const biggerSF = sfs.find(sf => sf.value > targetVal);
-          if (biggerSF) return biggerSF.cards;
-          if (kings) return kings;
-          // Also 6+ bomb beats SF? Rules vary. 
-          // Standard: 4 Kings > 6+ Bomb > SF > 5 Bomb > 4 Bomb.
-          // Wait: SF is usually just below 4 Kings or below 6 Bomb?
-          // Rules: 4 Kings > 6+ > SF > 5 > 4.
-          // Or 4 Kings > SF > 6+ ?
-          // Default: 4 Kings > 6+ > SF > 5 > 4.
-          // Let's assume SF beats 5 Bomb.
-          // Find Bomb >= 6
-          const bigBomb = bombs.find(b => b.cards.length >= 6);
-          if (bigBomb) return bigBomb.cards;
-          return null;
+    });
+
+    // Natural full houses preserve wild cards for more valuable uses.
+    const groups = Array.from(valueGroups.entries());
+    groups.forEach(([tripValue, tripCards]) => {
+      if (tripCards.length < 3) return;
+      groups.forEach(([pairValue, pairCards]) => {
+        if (tripValue !== pairValue && pairCards.length >= 2) add([...tripCards.slice(0, 3), ...pairCards.slice(0, 2)]);
+      });
+    });
+
+    // Straights and straight flushes; a wild card may fill a missing rank.
+    const windows: number[][] = [[Rank.Ace, Rank.Two, Rank.Three, Rank.Four, Rank.Five]];
+    for (let start = Rank.Two; start <= Rank.Ten; start += 1) {
+      windows.push([start, start + 1, start + 2, start + 3, start + 4]);
+    }
+    const makeSequence = (ranks: number[], suit?: Suit) => {
+      const selected: Card[] = [];
+      for (const rank of ranks) {
+        const card = naturals.find(item => item.rank === rank && (suit === undefined || item.suit === suit));
+        if (card) selected.push(card);
       }
-      
-      if (targetIsBomb) {
-          // Compare with target bomb
-          // Target count
-          const tCount = target.bombCount || 4;
-          const tVal = target.value;
-          
-          // Find bomb with > count OR (== count and > value)
-          for (const b of bombs) {
-              const bCount = b.cards.length;
-              const bVal = b.value;
-              if (bCount > tCount) return b.cards;
-              if (bCount === tCount && bVal > tVal) return b.cards;
-          }
-          
-          // If 5 bomb or less, SF beats it
-          if (tCount <= 5) {
-              if (sfs.length > 0) return sfs[0].cards;
-          }
-          
-          if (kings) return kings;
+      const missing = 5 - selected.length;
+      if (missing <= wilds.length) add([...selected, ...wilds.slice(0, missing)]);
+    };
+    windows.forEach(ranks => {
+      makeSequence(ranks);
+      [Suit.Spades, Suit.Hearts, Suit.Clubs, Suit.Diamonds].forEach(suit => makeSequence(ranks, suit));
+    });
+
+    // Three consecutive pairs (钢板) and two consecutive triples (木板).
+    const rankGroups = new Map<number, Card[]>();
+    naturals.filter(card => card.rank <= Rank.Ace).forEach(card => {
+      rankGroups.set(card.rank, [...(rankGroups.get(card.rank) || []), card]);
+    });
+    const consecutiveWindows = (length: number) => {
+      const result: number[][] = [[Rank.Ace, ...Array.from({ length: length - 1 }, (_, i) => Rank.Two + i)]];
+      for (let start = Rank.Two; start <= Rank.Ace - length + 1; start += 1) {
+        result.push(Array.from({ length }, (_, i) => start + i));
       }
-      
-      return null;
+      return result;
+    };
+    consecutiveWindows(3).forEach(ranks => {
+      if (ranks.every(rank => (rankGroups.get(rank)?.length || 0) >= 2)) {
+        add(ranks.flatMap(rank => rankGroups.get(rank)!.slice(0, 2)));
+      }
+    });
+    consecutiveWindows(2).forEach(ranks => {
+      if (ranks.every(rank => (rankGroups.get(rank)?.length || 0) >= 3)) {
+        add(ranks.flatMap(rank => rankGroups.get(rank)!.slice(0, 3)));
+      }
+    });
+
+    const smallJokers = this.cards.filter(card => card.rank === Rank.SmallJoker);
+    const bigJokers = this.cards.filter(card => card.rank === Rank.BigJoker);
+    if (smallJokers.length === 2 && bigJokers.length === 2) add([...smallJokers, ...bigJokers]);
+    return candidates;
   }
-  
-  getGroups(size: number): Card[][] {
-      const groups: Card[][] = [];
-      let current: Card[] = [];
-      for (const card of this.cards) {
-          if (current.length === 0 || getLogicValue(card.rank, this.level) === getLogicValue(current[0].rank, this.level)) {
-              current.push(card);
-          } else {
-              if (current.length >= size) groups.push(current.slice(0, size));
-              current = [card];
-          }
-      }
-      if (current.length >= size) groups.push(current.slice(0, size));
-      return groups.reverse(); // Smallest first
+
+  private leadScore(candidate: Candidate): number {
+    if (candidate.cards.length === this.cards.length) return -100000;
+    const remaining = this.cards.filter(card => !candidate.cards.some(used => used.id === card.id));
+    let score = this.estimateTurns(remaining) * 100;
+    score += this.structurePenalty(candidate) + candidate.hand.value;
+    if (this.isBombFamily(candidate.hand)) score += 520;
+    if ([HandType.Straight, HandType.TripsWithPair, HandType.Tube, HandType.Plate].includes(candidate.hand.type)) score -= 45;
+    score -= candidate.cards.length * 8;
+    return score;
   }
-  
-  getBombs(): { cards: Card[], value: number }[] {
-      const groups = this.getGroups(4);
-      return groups.map(g => ({ cards: g, value: getLogicValue(g[0].rank, this.level) }));
+
+  private followScore(candidate: Candidate): number {
+    let score = candidate.hand.value * 3 + this.structurePenalty(candidate);
+    if (this.isBombFamily(candidate.hand)) score += 350 + candidate.cards.length * 25;
+    score += candidate.cards.filter(card => card.isWild).length * 35;
+    return score;
+  }
+
+  private structurePenalty(candidate: Candidate): number {
+    if (this.isBombFamily(candidate.hand)) return 0;
+    const sourceGroups = new Map<number, Card[]>();
+    this.cards.forEach(card => {
+      const value = getLogicValue(card.rank, this.level);
+      sourceGroups.set(value, [...(sourceGroups.get(value) || []), card]);
+    });
+    let penalty = 0;
+    sourceGroups.forEach(group => {
+      const used = group.filter(card => candidate.cards.some(item => item.id === card.id)).length;
+      if (!used) return;
+      if (group.length >= 4 && used < group.length) penalty += 450;
+      else if (group.length === 3 && used < 3) penalty += 45;
+      else if (group.length === 2 && used === 1) penalty += 28;
+    });
+    penalty += candidate.cards.filter(card => card.isWild).length * 30;
+    return penalty;
+  }
+
+  private estimateTurns(cards: Card[]): number {
+    if (!cards.length) return 0;
+    const counts = new Map<number, number>();
+    cards.forEach(card => {
+      const value = getLogicValue(card.rank, this.level);
+      counts.set(value, (counts.get(value) || 0) + 1);
+    });
+    let trips = 0;
+    let pairs = 0;
+    let singles = 0;
+    let bombs = 0;
+    counts.forEach(count => {
+      if (count >= 4) bombs += 1;
+      else if (count === 3) trips += 1;
+      else if (count === 2) pairs += 1;
+      else singles += 1;
+    });
+    const fullHouses = Math.min(trips, pairs);
+    return bombs + fullHouses + (trips - fullHouses) + (pairs - fullHouses) + singles;
+  }
+
+  private isBombFamily(hand: Hand): boolean {
+    return hand.type === HandType.Bomb || hand.type === HandType.StraightFlush || hand.type === HandType.FourKings;
+  }
+
+  private isPartner(seat: number | undefined): boolean {
+    return seat !== undefined && this.context.seatIndex !== undefined && seat !== this.context.seatIndex && seat % 2 === this.context.seatIndex % 2;
+  }
+
+  private lowestOpponentCount(): number {
+    if (this.context.seatIndex === undefined || !this.context.handCounts) return Number.POSITIVE_INFINITY;
+    const counts = this.context.handCounts.filter((count, seat) => seat % 2 !== this.context.seatIndex! % 2 && count > 0);
+    return counts.length ? Math.min(...counts) : Number.POSITIVE_INFINITY;
   }
 }
