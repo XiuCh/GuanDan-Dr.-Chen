@@ -57,6 +57,7 @@ export const GameTable: React.FC<Props> = ({
   const [showChat, setShowChat] = useState(false);
   const [showRoomMenu, setShowRoomMenu] = useState(false);
   const [hintMessage, setHintMessage] = useState('');
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const displayName = (name?: string) => name?.replace(/^Bot (\d+)$/, '电脑 $1') || '等待入座';
   const rankLabel = (rank: number) => ({11:'J',12:'Q',13:'K',14:'A'}[rank] || String(rank));
   const handLabel = (hand: Hand) => getHandDescription(hand, gameState?.level || 2);
@@ -65,6 +66,25 @@ export const GameTable: React.FC<Props> = ({
     const close = (e: KeyboardEvent) => { if (e.key === 'Escape') {setShowChat(false);setShowHistory(false);setShowRoomMenu(false);} };
     window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close);
   }, []);
+  useEffect(() => {
+    const syncFullscreen = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', syncFullscreen);
+    return () => document.removeEventListener('fullscreenchange', syncFullscreen);
+  }, []);
+
+  const toggleFullscreen = async () => {
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else if (document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+      } else {
+        window.alert('iPhone Safari 请点“分享”，选择“添加到主屏幕”；以后从桌面打开即可隐藏地址栏。');
+      }
+    } catch {
+      window.alert('浏览器没有允许全屏。iPhone 可点“分享”→“添加到主屏幕”，再从桌面打开。');
+    }
+  };
 
   
   // Hand type selection state (for wild cards with multiple interpretations)
@@ -446,10 +466,11 @@ export const GameTable: React.FC<Props> = ({
       <PlayerArea data={right} pos="right-8 top-1/2 -translate-y-1/2" />
       
       <nav className="table-tools" aria-label="房间工具">
-        <button aria-pressed={mobileMode} onClick={onToggleMobileMode}>手机模式{mobileMode?' ✓':''}</button>
+        <button className="fullscreen-action" aria-pressed={isFullscreen} onClick={toggleFullscreen}>{isFullscreen ? '退出全屏' : '全屏'}</button>
+        <button aria-pressed={mobileMode} onClick={onToggleMobileMode}><span className="tool-label-wide">手机模式{mobileMode?' ✓':''}</span><span className="tool-label-short">手机{mobileMode?' ✓':''}</span></button>
         <button aria-expanded={showChat} onClick={() => {setShowChat(!showChat);setShowHistory(false);setShowRoomMenu(false);}}>聊天</button>
-        <button aria-expanded={showHistory} onClick={() => {setShowHistory(!showHistory);setShowChat(false);setShowRoomMenu(false);}}>历史记录</button>
-        <button aria-expanded={showRoomMenu} onClick={() => {setShowRoomMenu(!showRoomMenu);setShowChat(false);setShowHistory(false);}}>房间菜单</button>
+        <button aria-expanded={showHistory} onClick={() => {setShowHistory(!showHistory);setShowChat(false);setShowRoomMenu(false);}}><span className="tool-label-wide">历史记录</span><span className="tool-label-short">记录</span></button>
+        <button aria-expanded={showRoomMenu} onClick={() => {setShowRoomMenu(!showRoomMenu);setShowChat(false);setShowHistory(false);}}><span className="tool-label-wide">房间菜单</span><span className="tool-label-short">菜单</span></button>
       </nav>
       {mobileMode && <div className="rotate-tip" role="status">横屏玩，牌面更清楚</div>}
       {showRoomMenu && <section className="room-menu" aria-label="房间菜单">
@@ -633,21 +654,24 @@ export const GameTable: React.FC<Props> = ({
           ) : (
               // Stacked Matrix View (Compact columns)
               stackedColumns.map((col) => (
-                  <div key={col.rank} className="rank-stack" aria-label={`${rankLabel(col.rank)}，${col.cards.length} 张`}>
-                      {col.cards.map((card, idx) => (
-                        <div
-                          key={card.id}
-                          className={`rank-card-layer ${straightFlushIds.has(card.id) ? 'ring-2 ring-yellow-400 rounded' : ''}`}
-                          style={{ "--stack-index": idx, zIndex: idx + 1 } as React.CSSProperties}
-                        >
-                          <Card
-                            card={card}
-                            selected={selectedCardIds.includes(card.id)}
-                            onClick={() => toggleSelect(card.id)}
-                            isHighlighted={highlightedCardIds.has(card.id)}
-                          />
-                        </div>
-                      ))}
+                  <div key={col.rank} className={`rank-stack ${mobileMode ? 'mobile-rank-group' : ''}`} style={{'--stack-count': col.cards.length} as React.CSSProperties} aria-label={`${rankLabel(col.rank)}，${col.cards.length} 张`}>
+                      {mobileMode && <strong className="rank-group-label">{rankLabel(col.rank)}<small>×{col.cards.length}</small></strong>}
+                      <div className={mobileMode ? 'rank-suit-grid' : 'rank-layer-list'}>
+                        {col.cards.map((card, idx) => (
+                          <div
+                            key={card.id}
+                            className={`rank-card-layer ${straightFlushIds.has(card.id) ? 'straight-flush-card ring-2 ring-yellow-400 rounded' : ''}`}
+                            style={{ "--stack-index": idx, zIndex: idx + 1 } as React.CSSProperties}
+                          >
+                            <Card
+                              card={card}
+                              selected={selectedCardIds.includes(card.id)}
+                              onClick={() => toggleSelect(card.id)}
+                              isHighlighted={highlightedCardIds.has(card.id)}
+                            />
+                          </div>
+                        ))}
+                      </div>
                   </div>
               ))
           )}

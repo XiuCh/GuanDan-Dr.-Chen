@@ -145,3 +145,94 @@ html.mobile-mode .club-lobby .join-panel{width:100%}
   .game-table.mobile-layout .rank-card-layer{bottom:calc(var(--stack-index)*15px)}
   .game-table.mobile-layout .rank-stack .playing-card{width:58px;height:88px}
 }
+
+/* Mobile rank trays: independent columns, visible suit headers, no overlap between ranks. */
+@media(max-width:900px){
+  .game-table.mobile-layout .live-hand.hand-stacked{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:center;gap:10px 4px;width:calc(100% - 16px);height:auto;min-height:0;padding:12px 0 6px;overflow:visible}
+  .game-table.mobile-layout .rank-stack{flex:0 0 calc((100% - 28px)/8);min-width:0;height:calc(66px + (var(--stack-count) - 1)*24px)}
+  .game-table.mobile-layout .rank-card-layer{top:calc(var(--stack-index)*24px);bottom:auto;left:0;width:100%;box-shadow:none;--tw-ring-shadow:0 0 transparent}
+  .game-table.mobile-layout .rank-stack .playing-card{width:100%;height:66px;padding:0;border-radius:5px;box-shadow:0 2px 3px #0004}
+  .game-table.mobile-layout .rank-stack .card-corner{top:3px;left:3px;right:3px;flex-direction:row;justify-content:space-between;gap:0;font-size:16px;line-height:20px}
+  .game-table.mobile-layout .rank-stack .card-corner strong{font-size:17px;letter-spacing:-.5px}
+  .game-table.mobile-layout .rank-stack .card-bottom{display:none}
+  .game-table.mobile-layout .rank-stack .card-center{font-size:23px;padding-top:15px}
+  .game-table.mobile-layout .rank-stack .card-level{top:auto;bottom:3px;right:3px;left:auto;writing-mode:horizontal-tb;font-size:10px;padding:0 2px}
+  .game-table.mobile-layout .rank-stack .card-selected,.game-table.mobile-layout .rank-stack .playing-card:enabled:hover{transform:none}
+  .game-table.mobile-layout .rank-stack .card-selected{background:#ffe9a8;border-color:#b78322;box-shadow:inset 0 0 0 2px #c99a3d}
+}
+@media(max-width:900px) and (orientation:portrait){
+  .game-table.mobile-layout .table-tools{top:12px;right:8px;max-width:calc(100% - 118px);gap:4px}
+  .game-table.mobile-layout .table-tools button{font-size:12px;padding:5px 8px;min-height:34px}
+  .game-table.mobile-layout .rotate-tip{top:94px}
+  .game-table.mobile-layout .hand-dock{background:linear-gradient(transparent,#062920 32%);padding-top:8px}
+  .game-table.mobile-layout .player-seat.top-4{top:126px}
+  .game-table.mobile-layout .player-seat.top-1\/2{top:33%}
+}
+@media(max-width:900px) and (orientation:landscape){
+  .game-table.mobile-layout .rank-stack{flex-basis:calc((100% - 56px)/15);height:calc(54px + (var(--stack-count) - 1)*20px)}
+  .game-table.mobile-layout .rank-card-layer{top:calc(var(--stack-index)*20px)}
+  .game-table.mobile-layout .rank-stack .playing-card{height:54px}
+  .game-table.mobile-layout .live-hand.hand-stacked{padding-top:4px;gap:4px}
+}
+
+/* Phone v7: compact controls and small, tappable rank trays. */
+.tool-label-short,.fullscreen-action{display:none}
+@media(max-width:620px){
+  .game-table.mobile-layout{min-height:100svh;height:100svh}
+  .game-table.mobile-layout .table-level{top:8px;left:8px;width:102px;min-height:64px;padding:7px 9px;gap:2px;font-size:14px;border-radius:10px}
+  .game-table.mobile-layout .table-level b{font-size:21px}
+  .game-table.mobile-layout .table-level small{font-size:10px;max-width:84px}
+  .game-table.mobile-layout .table-tools{top:8px;left:116px;right:8px;max-width:none;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}
+  .game-table.mobile-layout .table-tools button{width:100%;min-width:0;min-height:36px;padding:5px 2px;font-size:12px;white-space:nowrap}
+  .game-table.mobile-layout .tool-label-wide{display:none}
+  .game-table.mobile-layout .tool-label-short{display:inline}
+  .game-table.mobile-layout .rotate-tip{top:52px;font-size:11px;padding:4px 10px}
+  .game-table.mobile-layout .player-seat.top-4{top:82px}
+  .game-table.mobile-layout .player-seat.top-1\/2{top:34%;min-width:70px;padding:6px 3px}
+  .game-table.mobile-layout .player-seat.left-8{left:4px}
+  .game-table.mobile-layout .player-seat.right-8{right:4px}
+  .game-table.mobile-layout .player-seat .w-12{width:38px;height:38px}
+  .game-table.mobile-layout .player-seat .text-white,.game-table.mobile-layout .player-seat .text-yellow-400{font-size:12px;line-height:1.25}
+  .game-table.mobile-layout .center-play{top:40%;max-width:60vw}
+  .game-table.mobile-layout .turn-banner{font-size:13px;padding:5px 14px;margin-bottom:4px}
+  .game-table.mobile-layout .action-row{flex-wrap:nowrap;gap:3px;padding:0 4px}
+  .game-table.mobile-layout .action-row button,.game-table.mobile-layout .action-row button.primary-play{min-height:36px;padding:6px 7px;font-size:12px;border-radius:8px;white-space:nowrap}
+  .game-table.mobile-layout .play-feedback{min-height:18px;line-height:18px;margin:2px 0;font-size:11px}
+  .game-table.mobile-layout .hand-dock{padding:5px 0 max(3px,env(safe-area-inset-bottom));background:linear-gradient(transparent,#062920 18%)}
+  .game-table.mobile-layout .live-hand.hand-stacked{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));align-items:start;justify-content:stretch;gap:4px 3px;width:calc(100vw - 12px);height:auto;min-height:0;max-height:176px;padding:3px 0;overflow:hidden}
+  .game-table.mobile-layout .rank-stack.mobile-rank-group{position:relative;display:flex;flex-direction:column;flex:none;width:auto;height:auto;min-width:0;min-height:52px;padding:3px;border:1px solid #bfa66e70;border-radius:6px;background:#0b332bcf;box-shadow:0 2px 4px #001e1855}
+  .game-table.mobile-layout .rank-group-label{display:flex;align-items:center;justify-content:space-between;height:18px;padding:0 2px;color:#f3dfb3;font:700 15px/18px Georgia,serif}
+  .game-table.mobile-layout .rank-group-label small{color:#93ad9e;font:600 9px/1 sans-serif}
+  .game-table.mobile-layout .rank-suit-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px;margin-top:2px}
+  .game-table.mobile-layout .mobile-rank-group .rank-card-layer{position:relative;inset:auto!important;width:auto;height:18px;box-shadow:none;--tw-ring-shadow:0 0 transparent}
+  .game-table.mobile-layout .mobile-rank-group .playing-card{position:relative;width:100%;height:18px;min-height:18px;padding:0;border:1px solid #d4cdbf;border-radius:3px;box-shadow:none;background:#fffdf6}
+  .game-table.mobile-layout .mobile-rank-group .card-corner{position:absolute;inset:0;display:grid;place-items:center;font-size:13px;line-height:18px}
+  .game-table.mobile-layout .mobile-rank-group .card-corner strong{display:none}
+  .game-table.mobile-layout .mobile-rank-group .card-center,.game-table.mobile-layout .mobile-rank-group .card-bottom{display:none}
+  .game-table.mobile-layout .mobile-rank-group .card-level{top:-4px;right:-2px;bottom:auto;left:auto;font-size:7px;line-height:9px;padding:0 1px}
+  .game-table.mobile-layout .mobile-rank-group .playing-card.card-selected{transform:none;background:#f7d37e;border-color:#f4c45d;box-shadow:inset 0 0 0 1px #9c6817}
+  .game-table.mobile-layout .mobile-rank-group .straight-flush-card .playing-card{border-color:#e4bc57}
+  .game-table.mobile-layout .hand-dock>.relative{font-size:12px;line-height:15px;margin-top:1px}
+  .game-table.mobile-layout .table-chat,.game-table.mobile-layout .room-menu{top:52px;right:8px;left:auto;width:calc(100vw - 16px)}
+  .game-table.mobile-layout:not(:has(.hand-normal)):not(:has(.hand-stacked)) .center-play{top:88px;transform:translateX(-50%);width:calc(100vw - 82px);max-width:430px;max-height:calc(100svh - 170px);overflow-y:auto}
+  .game-table.mobile-layout:not(:has(.hand-normal)):not(:has(.hand-stacked)) .waiting-panel{padding:18px 16px;border-radius:16px}
+  .game-table.mobile-layout:not(:has(.hand-normal)):not(:has(.hand-stacked)) .waiting-panel h1{font-size:25px;line-height:1.2;margin:7px 0 10px}
+  .game-table.mobile-layout:not(:has(.hand-normal)):not(:has(.hand-stacked)) .waiting-copy{font-size:13px;line-height:1.55;margin-bottom:14px}
+  .game-table.mobile-layout:not(:has(.hand-normal)):not(:has(.hand-stacked)) .room-code-row{padding:11px 14px;margin-bottom:14px}
+  .game-table.mobile-layout:not(:has(.hand-normal)):not(:has(.hand-stacked)) .waiting-mode{gap:8px}
+  .game-table.mobile-layout:not(:has(.hand-normal)):not(:has(.hand-stacked)) .mode-choice{min-height:58px;padding:8px}
+  .game-table.mobile-layout:not(:has(.hand-normal)):not(:has(.hand-stacked)) .waiting-actions{gap:9px;margin-top:14px}
+  .game-table.mobile-layout:not(:has(.hand-normal)):not(:has(.hand-stacked)) .ready-state,.game-table.mobile-layout:not(:has(.hand-normal)):not(:has(.hand-stacked)) .start-action{padding:10px}
+  .game-table.mobile-layout:not(:has(.hand-normal)):not(:has(.hand-stacked)) .seat-hint{margin-top:12px;font-size:11px;line-height:1.45}
+  .game-table.mobile-layout:not(:has(.hand-normal)):not(:has(.hand-stacked)) .player-seat.top-4{top:78px;transform:translate(-50%,-42%) scale(.76)}
+}
+
+@media(max-width:620px) and (orientation:landscape){
+  .game-table.mobile-layout .fullscreen-action{display:block}
+  .game-table.mobile-layout .live-hand.hand-stacked{grid-template-columns:repeat(15,minmax(0,1fr));max-height:84px;gap:2px}
+  .game-table.mobile-layout .rank-stack.mobile-rank-group{padding:2px;min-height:45px}
+  .game-table.mobile-layout .rank-group-label{height:15px;font-size:12px;line-height:15px}
+  .game-table.mobile-layout .rank-suit-grid{gap:1px;margin-top:1px}
+  .game-table.mobile-layout .mobile-rank-group .rank-card-layer,.game-table.mobile-layout .mobile-rank-group .playing-card{height:13px;min-height:13px}
+  .game-table.mobile-layout .mobile-rank-group .card-corner{font-size:10px;line-height:13px}
+}
